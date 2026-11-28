@@ -18,17 +18,17 @@ and DRA may need to be adapted to your environment.
 
 ### Default Configuration
 
-| Parameter          | Value                                                                                  |
-| ------------------ | -------------------------------------------------------------------------------------- |
-| Model              | [deepseek-ai/DeepSeek-V4-Pro](https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro)      |
-| Accelerator        | NVIDIA GB200 NVL72 (4 GPUs per node), cross-node NVLink via `ComputeDomain`            |
-| Serving topology   | P/D disaggregated `DisaggregatedSet`; prefill DEP8, decode TP=8, DEP8 or DEP16 (see [Deployments](#2-deploy-the-model-server)) |
-| DP model           | Hybrid load balancing (`--data-parallel-hybrid-lb`), expert parallelism enabled        |
-| MoE backend        | `deep_gemm_mega_moe`                                                                   |
-| KV transfer        | NixlConnector                                                                          |
-| KV cache           | FP8, block size 256                                                                    |
-| Max model length   | 9280 tokens                                                                            |
-| Model storage      | Node-local NVMe (`hostPath` `/mnt/numa0/hf-cache`, ~850 GB model)                      |
+| Parameter | Value |
+| --- | --- |
+| Model | [deepseek-ai/DeepSeek-V4-Pro](https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro) |
+| Accelerator | NVIDIA GB200 NVL72 (4 GPUs per node), cross-node NVLink via `ComputeDomain` |
+| Serving topology | P/D disaggregated `DisaggregatedSet`; prefill DEP8, decode TP=8, DEP8 or DEP16 (see [Deployments](#2-deploy-the-model-server)) |
+| DP model | Hybrid load balancing (`--data-parallel-hybrid-lb`), expert parallelism enabled |
+| MoE backend | `deep_gemm_mega_moe` |
+| KV transfer | NixlConnector |
+| KV cache | FP8, block size 256 |
+| Max model length | 9280 tokens |
+| Model storage | Node-local NVMe (`hostPath` `/mnt/numa0/hf-cache`, ~850 GB model) |
 
 ## Supported Accelerators and Model Servers
 
@@ -189,7 +189,7 @@ Each deployment is a different prefill : decode operating point. Set `DEPLOYMENT
 (default `oci-low-latency`, the smallest):
 
 | Deployment | Layout | Nodes / GPUs |
-|---|---|---|
+| --- | --- | --- |
 | `oci-low-latency` | 1 prefill (DEP8) : 1 decode (TP=8) | 4 / 16 |
 | `oci-low-latency-scaled` | 1 prefill (DEP8) : 4 decode (TP=8) | 10 / 40 |
 | `oci-mid-curve` | 1 prefill : 1 decode (DEP8 each) | 4 / 16 |
@@ -292,6 +292,7 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/model
 ```bash
 helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
 
+# only when MONITORING=true:
 kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/models/${GUIDE_NAME}/monitoring --ignore-not-found=true
 ```
 <!-- llm-d-cicd:skip start -->
