@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Tokenizer pool of the AMD GPU vLLM model server (../base): its vLLM release, its model
+# and its rendering flags, so the pool returns the model server's token IDs.
+# That model server sets no rendering flag and serves the base's model, so the
+# overlay changes the image alone.
+resources:
+  - ../../../../tokenizer
+
+components:
+  # The model server's image component: the pool follows its release.
+  - ../../../../../recipes/modelserver/components/images/amd-vllm/release
+
+images:
+  # The CPU build of that release. Only the name changes; the tag stays.
+  - name: docker.io/vllm/vllm-openai-rocm
+    newName: docker.io/vllm/vllm-openai-cpu

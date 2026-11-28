@@ -1,0 +1,11 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tokenizer
+spec:
+  # A node drain takes one tokenizer pod at a time.
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: tokenizer
+      app.kubernetes.io/part-of: precise-prefix-cache-routing

@@ -1,16 +1,14 @@
 ## precise-prefix-cache-routing guide overrides for the router.
 ## Layer on top of: recipes/router/base.values.yaml
 ##
-## The EPP `token-producer` plugin tokenizes prompts on the vLLM model servers
-## themselves: `vllm.endpointDiscovery` sends each render call to one of the
-## Ready InferencePool endpoints, round-robin per request, and retries once on
-## another endpoint after a transport error, timeout, 408, 429 or 5xx. Render
-## capacity therefore scales with the model server fleet, and no render Service
-## or EPP sidecar is deployed (the chart's `router.tokenizer` sidecar is off by
-## default). The model server overlays serve `/v1/*/render` on their inference
-## port (`--enable-scale-out` on vLLM 0.30). SGLang has no render endpoints, so
-## its values (precise-prefix-cache-routing.sglang.values.yaml) point `vllm.url`
-## at the dedicated `../render/standalone/` pool instead.
+## The EPP `token-producer` plugin tokenizes every prompt on the guide's
+## tokenizer pool: CPU-only `vllm launch render` servers behind a Service
+## (../tokenizer/, applied from ../modelserver/<accelerator>/<engine>/tokenizer/).
+## Each pool runs the vLLM release, the model and the rendering flags of the
+## model server beside it, so it returns that model server's token IDs.
+## Tokenization therefore has its own CPUs and scales by itself; the chart's
+## `router.tokenizer` sidecar stays off. The SGLang values
+## (precise-prefix-cache-routing.sglang.values.yaml) render on the same Service.
 ##
 ## Single EPP replica: the token-load-scorer's in-flight token accounting is
 ## local to each EPP process, so active-active HA (replicas: 2) would halve the
@@ -45,21 +43,22 @@ router:
         plugins:
           - type: token-producer
             parameters:
-              # Must match the model the overlay deploys: the render call lands
-              # on the model servers themselves, so a mismatch is rejected
-              # rather than silently producing token IDs from the wrong
-              # tokenizer.
+              # The model the tokenizer pool serves. Native rendering sends the
+              # request's own model name, and the pool rejects a model it does
+              # not serve.
               modelName: Qwen/Qwen3-32B
               vllm:
-                # Render on the Ready InferencePool endpoints, on their
-                # inference port (no portRules), round-robin.
-                endpointDiscovery:
-                  # Cap each attempt so a pod that is busy serving cannot use
-                  # the whole render budget (vllm.timeout, 5s, for completions;
-                  # vllm.mmTimeout, 30s, for chat, Messages and Responses) and
-                  # leave no time for the retry on another endpoint. Raise it
-                  # for multimodal prompts, whose render downloads images.
-                  attemptTimeout: 2s
+                # The tokenizer pool's Service: `precise-prefix-cache-routing-`
+                # namePrefix + Service name `tokenizer`.
+                url: "http://precise-prefix-cache-routing-tokenizer:8000"
+                # To render on the model servers instead, replace `url` with
+                # the block below. It sends each render to one Ready
+                # InferencePool endpoint, round-robin, and retries once on
+                # another; the vLLM model servers serve /v1/*/render on their
+                # inference port (`--enable-scale-out`). See "Optional
+                # Configuration" in the README.
+                # endpointDiscovery:
+                #   attemptTimeout: 2s
                 # How /v1/messages (Anthropic) and /v1/responses requests are
                 # tokenized. `auto` (default) probes the render endpoint once and
                 # uses vLLM's native /v1/messages/render or /v1/responses/render

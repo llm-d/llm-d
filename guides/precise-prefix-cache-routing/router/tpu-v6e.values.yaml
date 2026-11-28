@@ -17,15 +17,12 @@ router:
         plugins:
           - type: token-producer
             parameters:
-              # Must match the model the overlay deploys: with the default
-              # `../render/` overlay the render call lands on the model servers
-              # themselves, so a mismatch is rejected rather than silently
-              # producing token IDs from the wrong tokenizer.
+              # The model the tokenizer pool serves; see the guide values.
               modelName: Qwen/Qwen3-32B
               vllm:
-                # Guide render Service (../render/), not a loopback sidecar.
-                # `precise-prefix-cache-routing-` namePrefix + Service name `render`.
-                url: "http://precise-prefix-cache-routing-render:8000"
+                # The tokenizer pool's Service: `precise-prefix-cache-routing-`
+                # namePrefix + Service name `tokenizer`.
+                url: "http://precise-prefix-cache-routing-tokenizer:8000"
           - type: endpoint-notification-source
           - type: precise-prefix-cache-producer
             parameters:

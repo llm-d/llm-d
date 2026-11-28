@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Tokenizer pool of the Intel XPU vLLM model server (../base): its vLLM release,
+# its model and its rendering flags, so the pool returns the model server's
+# token IDs. That model server sets no rendering flag.
+resources:
+  - ../../../../tokenizer
+
+images:
+  # The CPU build of the vLLM release the model server's image is built on
+  # (VLLM_XPU_BASE_IMAGE in docker/common-versions). Change the two together.
+  - name: REPLACE_MODEL_SERVER_IMAGE
+    newName: docker.io/vllm/vllm-openai-cpu
+    newTag: v0.30.0
+
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: precise-prefix-cache-routing-tokenizer
+    patch: |-
+      # The model of ../base/patch-vllm.yaml.
+      - op: replace
+        path: /spec/template/spec/containers/0/args/0
+        value: "Qwen/Qwen3-0.6B"

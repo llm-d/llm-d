@@ -13,9 +13,9 @@ This guide routes requests on precise per-pod KV-cache state rather than request
 
 - Each model server pod (vLLM or SGLang) publishes KV-cache events over ZMQ, and every router replica subscribes to every pod (pod discovery) to build an index of resident KV blocks.
 - The [`precise-prefix-cache-producer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/preciseprefixcache) looks each request's prefix up in that index; the `prefix-cache-affinity-filter` keeps each prefix group on its cache-warm endpoints (gated by a calibrated `peakPrefillThroughput`), and the `token-load-scorer` picks the least token-loaded endpoint among them.
-- The router needs exact token IDs to look a prompt up, so it **renders (tokenizes) every prompt** before routing it: with vLLM on the model servers themselves, picking one Ready endpoint of the pool per request; with SGLang, which has no render endpoints, on a dedicated vLLM render pool this guide deploys.
+- The router needs exact token IDs to look a prompt up, so it **renders (tokenizes) every prompt** before routing it, on a **tokenizer pool** this guide deploys: CPU-only vLLM render servers that run the vLLM release, the model and the rendering flags of the model servers, so they return the model servers' token IDs.
 
-The default deployment serves `Qwen/Qwen3-32B` on NVIDIA GPUs with two replicas at tensor parallelism 2. [How It Works](#how-it-works) shows how this guide wires the events, rendering and the router together.
+The default deployment serves `Qwen/Qwen3-32B` on NVIDIA GPUs with two replicas at tensor parallelism 2. [How It Works](#how-it-works) shows how this guide wires the events, the tokenizer pool and the router together.
 
 For why KV-cache events make a better source of truth than heuristics, and how the indexer ingests them and scores requests, see [Prefix-Cache Aware Routing](../../docs/architecture/kv-management/prefix-cache-aware-routing.md#2-precise-implementation) and the [KV-Cache Indexer](../../docs/architecture/kv-management/kv-indexer.md).
 
@@ -26,9 +26,9 @@ This guide includes configurations for the following accelerator and model serve
 <!-- guide:support start -->
 | Accelerator | `ACCELERATOR_TYPE` | Served model | vLLM | SGLang | Notes |
 | --- | --- | --- | --- | --- | --- |
-| NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` (SGLang uses the dedicated render pool) |
+| NVIDIA GPU | `gpu` | `Qwen/Qwen3-32B` | ✅ validated | 🟡 community | Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` |
 | AMD GPU | `amd` | `Qwen/Qwen3-32B` | ✅ validated | — | 2 replicas × TP=2 (4 GPUs) |
-| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | 🟡 community | vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16 (SGLang uses the dedicated render pool) |
+| Intel XPU | `xpu` | `Qwen/Qwen3-0.6B` | ✅ validated | 🟡 community | vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16 |
 | Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | — | GKE only · 2 replicas × 4 chips (`2x2x1`, TP=4) · vLLM 0.29 · nightly runs on Spot capacity |
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 2 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 16k context) · nightly moved to `tpu/v5p` while v6e capacity is unavailable |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | — | GKE only · 2 replicas × 4 chips (`2x2x1`, DP=2 × TP=4, EP) · Torch TPU vLLM |
@@ -41,7 +41,8 @@ This guide includes configurations for the following accelerator and model serve
 > The router and the model servers must agree on two things:
 >
 > - **Block size.** vLLM `--block-size` and SGLang `--page-size` are `64`, matching the `precise-prefix-cache-producer`'s `tokenProcessorConfig.blockSizeTokens`; change them together. **TPU v6e** is the exception: `--block-size=64` runs out of SMEM on Torch TPU, so the `tpu/v6` overlay sets `--block-size=256` and [`router/tpu-v6e.values.yaml`](router/tpu-v6e.values.yaml) sets `blockSizeTokens: 256` to match.
-> - **Model.** The `token-producer` `modelName` in the [vLLM](router/precise-prefix-cache-routing.values.yaml) and [SGLang](router/precise-prefix-cache-routing.sglang.values.yaml) router values is `Qwen/Qwen3-32B`. On an accelerator that serves another model (e.g. Intel XPU's `Qwen/Qwen3-0.6B`), set it to `MODEL` in the values file you're deploying before installing the router: with vLLM the render call lands on the model servers themselves, so a mismatch is rejected outright rather than silently scoring against the wrong tokenizer.
+> - **Model.** The `token-producer` `modelName` in the [vLLM](router/precise-prefix-cache-routing.values.yaml) and [SGLang](router/precise-prefix-cache-routing.sglang.values.yaml) router values is `Qwen/Qwen3-32B`. On an accelerator that serves another model (e.g. Intel XPU's `Qwen/Qwen3-0.6B`), set it to `MODEL` in the values file you're deploying before installing the router.
+>   The [tokenizer pool](#2-deploy-the-tokenizer-pool) of each accelerator already serves that accelerator's model and answers 404 to a render for any other, so a mismatch is rejected outright rather than silently scoring against the wrong tokenizer.
 
 For wide-EP LWS deployments (multi-port DP model servers), use the precise prefix-cache routing mode in the [GLM-5.2 guide](../models/glm-5-2/README.md#installation-instructions) instead of the manifests here.
 
@@ -50,13 +51,14 @@ Annotate the pods `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` unde
 The TPU7x overlay runs DP=2 × TP=4 so per-rank KV events are exercised with a small rank count; for the tuned Qwen3.5-397B layout (DP=8 × TP=1, EP, 262k context, host KV tier, MTP) see the [Qwen3.5-397B model guide](../models/qwen3-5-397b/README.md).
 
 > [!NOTE]
-> The router runs as a **single replica**: the `token-load-scorer`'s in-flight token accounting is local to each router process, so two active-active replicas would each see only half the per-endpoint load and mis-gate the affinity filter. The precise KV index is not HA-safe either: on a warm fleet, a replica that starts later than the others misses every prefix cached before its replay window and everything built on those, until they are evicted (see [Index recovery](#index-recovery)). Active-active HA (`--set router.epp.replicas=2`) therefore needs both shared in-flight state and a complete index at start, which today means the experimental [snapshot option](#optional-configuration).
+> The router runs as a **single replica**: the `token-load-scorer`'s in-flight token accounting is local to each router process, so two active-active replicas would each see only half the per-endpoint load and mis-gate the affinity filter.
+> The precise KV index is not HA-safe either: on a warm fleet, a replica that starts later than the others misses every prefix cached before its replay window and everything built on those, until they are evicted (see [Index recovery](#index-recovery)). Active-active HA (`--set router.epp.replicas=2`) therefore needs both shared in-flight state and a complete index at start, which today means the experimental [snapshot option](#optional-configuration).
 
 ### Supported APIs
 
-Precise routing needs the router's token IDs to match the model server's exactly, so the router tokenizes each request with the render endpoint vLLM provides for that API:
+Precise routing needs the router's token IDs to match the model server's exactly, so the router tokenizes each request with the render endpoint vLLM provides for that API. The tokenizer pool serves these endpoints on the model server's vLLM release:
 
-| API | Router render call | vLLM 0.30 (NVIDIA, AMD, Intel, CPU; SGLang render pool) | vLLM 0.29 (TPU) |
+| API | Router render call | Pool on vLLM 0.30 or later (NVIDIA, AMD, Intel, TPU v5p, CPU; SGLang) | Pool on vLLM 0.29 (TPU v6e, TPU7x) |
 | --- | --- | --- | --- |
 | `/v1/completions` | `/v1/completions/render` | ✅ native | ✅ native |
 | `/v1/chat/completions` | `/v1/chat/completions/render` | ✅ native | ✅ native |
@@ -69,7 +71,7 @@ The `token-producer` picks the render path with `vllm.messagesRenderMode` and `v
 - `native`: always use the native endpoint, with no fallback; rendering fails if the render endpoint lacks it.
 - `legacy`: translate the request into a chat-completions render call. This path is deprecated and does not guarantee token parity, so some precise matches are lost.
 
-Responses support is a preview: vLLM renders it natively, but the router's token-parity coverage for Responses requests is still in progress. On the TPU overlays (vLLM 0.29, no `/v1/responses/render`), `auto` falls back to `legacy` and the router logs a deprecation message. vLLM 0.30 serves both APIs and their render endpoints, which the Messages and Responses requests in [Verification](#3-send-test-requests) exercise; with SGLang, whether those APIs are served depends on the SGLang server.
+Responses support is a preview: vLLM renders it natively, but the router's token-parity coverage for Responses requests is still in progress. On the TPU v6e and TPU7x pools (vLLM 0.29, no `/v1/responses/render`), `auto` falls back to `legacy` and the router logs a deprecation message. vLLM 0.30 and later serve both APIs and their render endpoints, which the Messages and Responses requests in [Verification](#3-send-test-requests) exercise; with SGLang, whether those APIs are served depends on the SGLang server.
 
 ## Prerequisites
 
@@ -226,9 +228,32 @@ helm install ${GUIDE_NAME} \
 ```
 <!-- guide:deploy.standalone end -->
 
-The router renders prompts over HTTP (see [step 3](#3-render-tokenizer-endpoints)), so the chart's `router.tokenizer` sidecar stays off.
+The router renders prompts over HTTP on the tokenizer pool of the next step, so the chart's `router.tokenizer` sidecar stays off.
 
-### 2. Deploy the Model Server
+### 2. Deploy the Tokenizer Pool
+
+The router's `token-producer` plugin tokenizes each prompt by calling vLLM's `/v1/*/render` endpoints, so it can look up the exact KV blocks the prompt maps to. A **tokenizer pool** serves those endpoints: CPU-only `vllm launch render` pods behind a Service, which load the tokenizer and the chat template and no weights. Tokenization runs on the pool's own CPUs, apart from the model servers' API servers, and the pool scales by itself.
+
+**Apply the pool of your accelerator and model server:**
+
+<!-- guide:deploy.tokenizer start -->
+```bash
+kubectl apply -n ${NAMESPACE} \
+  -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/tokenizer/
+```
+<!-- guide:deploy.tokenizer end -->
+
+A pool returns the model server's token IDs because its overlay takes three things from the model server overlay beside it (e.g., [pool](./modelserver/gpu/vllm/tokenizer/kustomization.yaml) and [patch](./modelserver/gpu/vllm/base/patch-vllm.yaml) for vLLM on GPU):
+
+- **vLLM release.** The pool runs the CPU build of the model server's vLLM release. The overlay takes the tag from the model server's [image component](../recipes/modelserver/components/images/README.md), so a version bump moves both; the Intel XPU pool pins the release its model server image is built on.
+- **Model.** The model the accelerator serves.
+- **Rendering flags.** The model server's tool and reasoning parser flags and its context length. On NVIDIA GPU these are `--enable-auto-tool-choice`, `--tool-call-parser=hermes` and `--reasoning-parser=qwen3`: a pool without them answers 400 to every request that carries tools, and the router then routes those requests without cache information.
+
+When you change the model or one of these flags on the model server, change the pool's overlay with it. SGLang serves no render endpoints, so its pool tokenizes with vLLM's tokenizer for the model SGLang serves.
+
+The pool runs 2 pods of 4 render workers each (`--renderer-num-workers=4`), spread across nodes, behind a PodDisruptionBudget; see [Running in Production](#running-in-production) for sizing. Its pods deliberately do **not** carry the `llm-d.ai/guide` label: the router would otherwise treat them as routable model servers. To render on the vLLM model servers instead, see [Optional Configuration](#optional-configuration).
+
+### 3. Deploy the Model Server
 
 For model sources, caching, and startup optimization, see the [Model Loading and Startup Acceleration operations guide](../../docs/operations/startup/model-loading-and-startup.md).
 
@@ -242,53 +267,6 @@ kubectl apply -n ${NAMESPACE} \
 <!-- guide:deploy.modelserver end -->
 
 The vLLM model server overlays drain in-flight requests during rollouts and scale-down: `--shutdown-timeout=45`, plus a 15s `preStop` sleep and a 75s termination grace period from the [`graceful-shutdown` component](../recipes/modelserver/components/graceful-shutdown/kustomization.yaml). To tune these, see [Graceful Shutdown & Request Draining](../../docs/operations/lifecycle/graceful-shutdown.md).
-
-### 3. Render (Tokenizer) Endpoints
-
-The router's `token-producer` plugin tokenizes each prompt by calling vLLM's `/v1/*/render` endpoints, so it can look up the exact KV blocks the prompt maps to.
-
-<!-- tabs:start group=engine -->
-<details open data-when="MODEL_SERVER=vllm">
-<summary><b>vLLM</b></summary>
-
-**Nothing to deploy.** The router renders on the model servers you just deployed: `vllm.endpointDiscovery` in the [router values](router/precise-prefix-cache-routing.values.yaml) sends each render call to one of the `Ready` endpoints of the InferencePool, round-robin, and retries once on another endpoint after a transport error, a timeout, or a 408, 429 or 5xx response.
-vLLM 0.30 serves `/v1/*/render` only with `--enable-scale-out`; the NVIDIA GPU, AMD GPU, Intel XPU, and CPU overlays set it, and the TPU overlays use vLLM 0.29, which exposes the endpoint without the flag. Without it every render call returns 404 and the router routes without cache information, which the [render check](#2-check-rendering) catches.
-Render capacity scales with the fleet, which keeps render latency (part of TTFT, since every request is tokenized before it is routed) contained at higher QPS.
-The trade-off: tokenization CPU competes with serving on the same pods (the GPU overlay requests 8 CPU / limits 16 per replica; raise that if render latency climbs under load).
-
-</details>
-<details data-when="ACCELERATOR_TYPE=gpu;MODEL_SERVER=sglang">
-<summary><b>NVIDIA GPU · SGLang</b></summary>
-
-<!-- guide:deploy.render[0] start -->
-<!-- llm-d-cicd:skip start -->
-```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
-```
-<!-- llm-d-cicd:skip end -->
-<!-- guide:deploy.render[0] end -->
-
-SGLang does not implement vLLM's render endpoints, so the `render/standalone/` overlay runs a dedicated, GPU-less `vllm launch render` pool (3 replicas) instead.
-It tokenizes with vLLM's tokenizer whichever engine serves inference. It also suits vLLM deployments that should not spend model server CPU on tokenization: apply it and replace `vllm.endpointDiscovery` in the vLLM router values with the SGLang values' `vllm.url`.
-It is configured for `Qwen/Qwen3-32B`; for another model, change the model argument in [`render/standalone/deployment.yaml`](render/standalone/deployment.yaml) together with the router `token-producer` `modelName`. Scale it with `kubectl scale -n ${NAMESPACE} deploy/${GUIDE_NAME}-render --replicas=<N>`.
-These render pods deliberately do **not** carry the `llm-d.ai/guide` label: the router would otherwise treat them as routable model servers.
-
-</details>
-<details data-when="ACCELERATOR_TYPE=xpu;MODEL_SERVER=sglang">
-<summary><b>Intel XPU · SGLang</b></summary>
-
-<!-- guide:deploy.render[1] start -->
-<!-- llm-d-cicd:skip start -->
-```bash
-kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-sglang/
-```
-<!-- llm-d-cicd:skip end -->
-<!-- guide:deploy.render[1] end -->
-
-Same standalone render pool as `render/standalone/`, but patched to tokenize `Qwen/Qwen3-0.6B` (the model served by the XPU overlay) instead of `Qwen/Qwen3-32B`.
-
-</details>
-<!-- tabs:end -->
 
 **(Optional) Deploy the monitoring resources for model servers** (see [Collect Metrics](../../docs/operations/observability/metrics.md)):
 
@@ -324,51 +302,27 @@ export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{
 
 ### 2. Check Rendering
 
-**Check that rendering returns token IDs for your model**: with vLLM on every model server pod, with SGLang on the render pool. The check prints `OK` per endpoint and exits non-zero on the first response without `token_ids`:
+**Check that every tokenizer pod returns token IDs for your model.** The check prints `OK` per pod and exits non-zero on the first response without `token_ids`:
 
 <!-- guide:verify.tests.render start -->
-<!-- variants:start -->
-<details open data-when="MODEL_SERVER=vllm">
-<summary><b>vLLM</b></summary>
-
 ```bash
-# Every model server pod must return token IDs for MODEL: the router
-# renders on each of them in turn. Exits non-zero on the first pod that
-# does not, e.g. a 404 when vLLM runs without --enable-scale-out.
-export POD_IPS=$(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].status.podIP}')
+# Every tokenizer pod must return token IDs for MODEL: the router
+# renders on the pool through its Service. Exits non-zero on the
+# first pod that does not, e.g. a 404 when the pool serves another
+# model.
+export POD_IPS=$(kubectl get pods -n ${NAMESPACE} -l app.kubernetes.io/component=tokenizer,app.kubernetes.io/part-of=${GUIDE_NAME} -o jsonpath='{.items[*].status.podIP}')
 kubectl run render-check --rm -i --restart=Never \
   --image=${CURL_TEST_IMAGE} \
   --namespace="${NAMESPACE}" \
   --env="POD_IPS=${POD_IPS}" \
   --env="MODEL=${MODEL}" \
-  -- /bin/sh -c 'test -n "${POD_IPS}" || { echo "FAIL: no model server pods"; exit 1; }
+  -- /bin/sh -c 'test -n "${POD_IPS}" || { echo "FAIL: no tokenizer pods"; exit 1; }
     for ip in ${POD_IPS}; do
       R=$(curl -sS -X POST "http://${ip}:8000/v1/completions/render" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"render check\", \"max_tokens\": 1}")
       echo "${R}" | grep -q "\"token_ids\"" || { echo "FAIL: ${ip}: ${R}"; exit 1; }
       echo "OK: ${ip}"
     done'
 ```
-
-</details>
-<details data-when="MODEL_SERVER=sglang">
-<summary><b>SGLang</b></summary>
-
-<!-- llm-d-cicd:skip start -->
-```bash
-# The render pool must return token IDs for MODEL before requests are routed
-kubectl run render-check --rm -i --restart=Never \
-  --image=${CURL_TEST_IMAGE} \
-  --namespace="${NAMESPACE}" \
-  --env="GUIDE_NAME=${GUIDE_NAME}" \
-  --env="MODEL=${MODEL}" \
-  -- /bin/sh -c 'R=$(curl -sS -X POST "http://${GUIDE_NAME}-render:8000/v1/completions/render" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"render check\", \"max_tokens\": 1}")
-    echo "${R}" | grep -q "\"token_ids\"" || { echo "FAIL: ${R}"; exit 1; }
-    echo "OK: ${GUIDE_NAME}-render"'
-```
-<!-- llm-d-cicd:skip end -->
-
-</details>
-<!-- variants:end -->
 <!-- guide:verify.tests.render end -->
 
 ### 3. Send Test Requests
@@ -416,7 +370,7 @@ kubectl run curl-responses --rm -i --restart=Never \
 
 ### 4. Verify that the router renders
 
-The [render check](#2-check-rendering) calls the render endpoints directly, so it passes even when the router's own render calls fail. Requests still return 200 in that case, routed without cache information. Confirm that the router renders a request itself, using its render metrics.
+The [render check](#2-check-rendering) calls the tokenizer pods directly, so it passes even when the router's own render calls fail. Requests still return 200 in that case, routed without cache information. Confirm that the router renders a request itself, using its render metrics.
 
 **Let the check pods read the router's metrics.** The router authenticates `/metrics` by default (a harmless no-op if `monitoring.values.yaml` turned that off), so grant the namespace's `default` service account read access:
 
@@ -441,7 +395,7 @@ kubectl create clusterrolebinding ${GUIDE_NAME}-metrics-reader \
 ```bash
 # The router must render a request itself: one more successful render
 # call and no new failed one across a request sent through it. The
-# render check above calls the model servers directly, so it passes
+# render check above calls the tokenizer pods directly, so it passes
 # even when the router's own renders fail and it routes every request
 # without cache information.
 kubectl run router-render-check --rm -i --restart=Never \
@@ -532,7 +486,7 @@ If the requests are spread evenly and hit rates stay near zero, the router is no
 1. **Model server pods publish KV-cache events** — each pod (vLLM or SGLang) runs with `--kv-events-config '{...,"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@<model>"}'` and `KV_EVENTS_ENDPOINT=tcp://*:5556`, binding its own ZMQ socket. On every KV block allocation/eviction, the server emits a ZMQ message. Every vLLM overlay additionally binds a ZMQ ROUTER socket on port 5559 (`KV_EVENTS_REPLAY_ENDPOINT`) and retains the last 10,000 event batches in an in-memory replay buffer for index recovery; SGLang has no replay buffer.
 2. **Router subscribes per pod** — pod discovery (`kvEventsConfig.discoverPods: true`) registers the `precise-prefix-cache-producer` as an extractor on the data-layer `endpoint-notification-source`, so each router replica installs a ZMQ subscriber per model server pod independently. See [Index recovery](#index-recovery) for how a router that starts against warm model servers rebuilds the index.
 3. **Router indexes only prefix-shaped cache groups** — vLLM tags each event with its cache group. The router indexes stores from full-attention groups (`full_attention`, `mla_attention`, `sink_full_attention`) whose hashes cover a contiguous token span, and skips groups such as sliding-window attention whose blocks do not form a prefix. Hybrid-attention models therefore index correctly instead of reporting false prefix residency; skipped events are counted in `llm_d_epp_kv_cache_events_stores_skipped_total{cache_kind,reason}`. The models in this guide use full attention only, so nothing is skipped.
-4. **Router tokenizes the prompt** — before it can look the prefix up in that index, the `token-producer` plugin POSTs the request to the render endpoint that matches its API (see [Supported APIs](#supported-apis)) on one of the model servers (SGLang: the render pool) to get exact token IDs.
+4. **Router tokenizes the prompt** — before it can look the prefix up in that index, the `token-producer` plugin POSTs the request to the render endpoint that matches its API (see [Supported APIs](#supported-apis)) on the tokenizer pool to get exact token IDs. With vLLM, the pool runs the model server's release, model and rendering flags, so the IDs are the ones the model server computes for the same request.
 5. **Filter + score** — the `prefix-cache-affinity-filter` narrows candidates to the pods where the request's prefix blocks are resident (falling back to the least-loaded pods when the cache-warm set is saturated past `peakPrefillThroughput`), and the `token-load-scorer` picks the endpoint with the least in-flight token load among them.
 
 ### Index recovery
@@ -553,10 +507,13 @@ SGLang has no replay buffer, so its values leave `replaySocketPort` unset. With 
 
 ## Optional Configuration
 
-The settings below are commented out in [`router/precise-prefix-cache-routing.values.yaml`](router/precise-prefix-cache-routing.values.yaml); uncomment them under `kvEventsConfig` to use them.
+The settings below are commented out in [`router/precise-prefix-cache-routing.values.yaml`](router/precise-prefix-cache-routing.values.yaml): the first under `token-producer`, the others under `kvEventsConfig`. Uncomment them to use them.
 
+- **Render on the model servers** with `vllm.endpointDiscovery` in place of `vllm.url` (vLLM only). The router then sends each render to one `Ready` endpoint of the InferencePool, round-robin, and retries once on another endpoint after a transport error, a timeout, or a 408, 429 or 5xx response; `attemptTimeout: 2s` caps each attempt so the retry has time left.
+  No tokenizer pool is deployed (skip [step 2](#2-deploy-the-tokenizer-pool)) and render capacity follows the fleet, but tokenization then takes CPU and API-server time from the pods that serve inference. vLLM 0.30 and later serve `/v1/*/render` only with `--enable-scale-out`, which the NVIDIA GPU, AMD GPU, Intel XPU and CPU overlays set.
 - **Limit subscriptions to pods that publish events** with `podDiscoveryConfig.podLabelSelector`. The default (empty) selector subscribes to every model server pod in the pool. In a pool where some pods publish no KV events, such as decode-only pods in a prefill/decode deployment, set a selector (for example `llm-d.ai/role=prefill`) so the router does not dial those pods and retry indefinitely. Pods that stop matching lose their subscriber and their index entries. An invalid selector fails router startup.
-- **Warm the index from a vLLM snapshot (experimental)** with `podDiscoveryConfig.snapshotSocketPort`. A subscriber that joins mid-stream, sees its engine restart, or misses events loads the pod's KV-event snapshot in place of a full replay, so a late-starting router covers each pod's whole cache, not just its replay window. The export briefly stalls the engine, for a time that grows with the cache size. This requires vLLM's KV-event snapshot support ([vllm-project/vllm#57789](https://github.com/vllm-project/vllm/pull/57789)), which is not in a vLLM release yet. Upgrade the router before setting `snapshot_endpoint` on vLLM: older routers cannot decode the event batches of an engine with snapshots enabled.
+- **Warm the index from a vLLM snapshot (experimental)** with `podDiscoveryConfig.snapshotSocketPort`. A subscriber that joins mid-stream, sees its engine restart, or misses events loads the pod's KV-event snapshot in place of a full replay, so a late-starting router covers each pod's whole cache, not just its replay window. The export briefly stalls the engine, for a time that grows with the cache size.
+  This requires vLLM's KV-event snapshot support ([vllm-project/vllm#57789](https://github.com/vllm-project/vllm/pull/57789)), which is not in a vLLM release yet. Upgrade the router before setting `snapshot_endpoint` on vLLM: older routers cannot decode the event batches of an engine with snapshots enabled.
 
 ## Observability
 
@@ -575,13 +532,15 @@ With `MONITORING=true`, Prometheus scrapes the router's metrics. The `llm_d_epp_
 | `llm_d_epp_kv_cache_index_lookup_latency_seconds` | Index lookup latency, part of every routing decision. |
 | `llm_d_epp_prefix_predicted_cached_tokens` / `llm_d_epp_prefix_prompt_tokens` | Per-request histograms; the ratio of their `_sum`s is the share of prompt tokens the router predicted the chosen endpoint had cached. Compare it with the model servers' prefix-cache hit rate (below). |
 
-To tell **low prefix reuse** apart from an **incomplete index**, compare the same token share on both sides. On the router, divide `llm_d_epp_prefix_predicted_cached_tokens_sum` by `llm_d_epp_prefix_prompt_tokens_sum` (the prompt tokens the router predicted the chosen endpoint had cached); on the model servers, divide `vllm:prefix_cache_hits_total` by `vllm:prefix_cache_queries_total`. With a complete index the two track each other closely. If the model servers' share is clearly higher, the index is missing blocks: check the subscriber, error and queue metrics above, and see [Index recovery](#index-recovery). If both are low, the workload simply shares little prefix.
+To tell **low prefix reuse** apart from an **incomplete index**, compare the same token share on both sides. On the router, divide `llm_d_epp_prefix_predicted_cached_tokens_sum` by `llm_d_epp_prefix_prompt_tokens_sum` (the prompt tokens the router predicted the chosen endpoint had cached); on the model servers, divide `vllm:prefix_cache_hits_total` by `vllm:prefix_cache_queries_total`. With a complete index the two track each other closely.
+If the model servers' share is clearly higher, the index is missing blocks: check the subscriber, error and queue metrics above, and see [Index recovery](#index-recovery). If both are low, the workload simply shares little prefix.
 
 The `llm-d-kv-cache-index` Grafana dashboard charts these metrics, split by router replica where replicas keep separate state, and includes this hit-rate comparison; see [Use Grafana Dashboards](../../docs/operations/observability/dashboards.md).
 
 ### Tracing
 
-To trace the router, deploy an OpenTelemetry collector and layer [`tracing.values.yaml`](../recipes/router/features/tracing.values.yaml) onto the router install, as described in [Trace Requests](../../docs/operations/observability/tracing.md). Router tracing covers the `tokenize` call to the render endpoint and the KV-index lookups (`index_lookup` and related spans). Spans for KV-event processing (`events_receive`, `events_process`, `events_decode`) are separate and off by default, because events arrive at many times the request rate and would crowd request traces out of a shared sampler: set `kvEventsConfig.tracing: true` to add them while debugging.
+To trace the router, deploy an OpenTelemetry collector and layer [`tracing.values.yaml`](../recipes/router/features/tracing.values.yaml) onto the router install, as described in [Trace Requests](../../docs/operations/observability/tracing.md). Router tracing covers the `tokenize` call to the render endpoint and the KV-index lookups (`index_lookup` and related spans).
+Spans for KV-event processing (`events_receive`, `events_process`, `events_decode`) are separate and off by default, because events arrive at many times the request rate and would crowd request traces out of a shared sampler: set `kvEventsConfig.tracing: true` to add them while debugging.
 
 ## Running in Production
 
@@ -589,9 +548,15 @@ This section collects what an operator needs to run this guide beyond a demo. Th
 
 - **Supported path.** vLLM 0.30 on NVIDIA GPU is the reference: it is validated nightly. Every vLLM overlay enables index recovery through replay; SGLang does not. AMD GPU and Intel XPU are validated nightly; TPU v5p is validated on vLLM 0.29, where Responses requests use the legacy render path. See [Supported Accelerators and Model Servers](#supported-accelerators-and-model-servers) and [Supported APIs](#supported-apis).
 - **Router replicas.** Run one router replica (see the note under [Supported Accelerators and Model Servers](#supported-accelerators-and-model-servers)). A router restart therefore routes from a partial index until replay completes and, on a warm fleet, until prefixes stored before the replay window are evicted and stored again (see [Index recovery](#index-recovery)).
-- **Metrics to watch.** Alert when a pod's `llm_d_epp_kv_cache_events_messages_received_total` rate is zero while it serves traffic (this catches a pod that is up but publishes on the wrong port or topic, which `active_subscribers` does not, since it counts subscribers that are still retrying), when `llm_d_epp_kv_cache_events_zmq_errors_total` rises for a pod, and when `llm_d_epp_kv_cache_events_pool_queue_depth` keeps growing. `active_subscribers` is not a health check: the router creates exactly one subscriber per pod `podLabelSelector` matches, so it equals that count by construction and a wrong selector still passes. Instead, compare it with the number of pods that run with `--kv-events-config`. Track the router's predicted cached-token share against the model servers' prefix-cache hit rate (see [Metrics](#metrics)).
-- **Render.** Every request is rendered before it is routed, so a failed render routes it without cache information and a slow one adds to its TTFT. One attempt could otherwise use the request's whole render budget (`vllm.timeout`, 5 s by default; `vllm.mmTimeout`, 30 s, for chat, Messages and Responses) and leave no time for the retry on another endpoint, so this guide caps each attempt with `vllm.endpointDiscovery.attemptTimeout: 2s`; raise it for multimodal prompts. Watch `llm_d_epp_token_producer_render_failures_total` and `llm_d_epp_token_producer_render_duration_seconds` (see the [router metric reference](../../docs/operations/observability/router-metrics.md)).
-- **Recovery.** If a pod's events stop reaching the router (its `messages_received_total` rate is zero, or its ZMQ errors keep rising), check that the pod exposes port `5556` (and `5559` on vLLM) and that its `--kv-events-config` topic matches `kvEventsConfig.topicFilter`. Restarting the router (`kubectl rollout restart -n ${NAMESPACE} deploy/${GUIDE_NAME}-epp`) re-subscribes to every pod without restarting the model servers, but it drops the index for every pod and rebuilds only each pod's replay window (see [Index recovery](#index-recovery)). On a warm fleet that can cost more routing quality than one broken stream, so fix the pod's configuration first and restart the router only when the index is broadly wrong. The experimental [snapshot option](#optional-configuration) is meant to make such a restart keep full coverage. If render calls fail, re-run the [render check](#2-check-rendering).
+- **Metrics to watch.** Alert when a pod's `llm_d_epp_kv_cache_events_messages_received_total` rate is zero while it serves traffic (this catches a pod that is up but publishes on the wrong port or topic, which `active_subscribers` does not, since it counts subscribers that are still retrying), when `llm_d_epp_kv_cache_events_zmq_errors_total` rises for a pod, and when `llm_d_epp_kv_cache_events_pool_queue_depth` keeps growing.
+  `active_subscribers` is not a health check: the router creates exactly one subscriber per pod `podLabelSelector` matches, so it equals that count by construction and a wrong selector still passes. Instead, compare it with the number of pods that run with `--kv-events-config`. Track the router's predicted cached-token share against the model servers' prefix-cache hit rate (see [Metrics](#metrics)).
+- **Tokenizer pool.** Every request is rendered before it is routed, so a failed render routes it without cache information and a slow one adds to its TTFT. A render worker runs one render at a time on one core, so the pool renders `replicas` × `--renderer-num-workers` prompts at once (8 by default), and a render that finds every worker busy waits in line.
+  Size the pool for the peak number of renders in flight (request rate × render time, which grows with prompt length) with one pod to spare, and scale it with `kubectl scale -n ${NAMESPACE} deploy/${GUIDE_NAME}-tokenizer --replicas=<N>`. The router keeps its connections to the pool's Service alive, so a pod added under load takes renders only as the router opens new connections.
+  The router does not retry a render on the pool: a pod that is lost fails the renders in flight on it, and those requests are routed without cache information. Keep the pool on the model server's vLLM release, model and rendering flags through every upgrade (see [step 2](#2-deploy-the-tokenizer-pool)).
+  Watch `llm_d_epp_token_producer_render_failures_total` and `llm_d_epp_token_producer_render_duration_seconds` (see the [router metric reference](../../docs/operations/observability/router-metrics.md)).
+- **Recovery.** If a pod's events stop reaching the router (its `messages_received_total` rate is zero, or its ZMQ errors keep rising), check that the pod exposes port `5556` (and `5559` on vLLM) and that its `--kv-events-config` topic matches `kvEventsConfig.topicFilter`.
+  Restarting the router (`kubectl rollout restart -n ${NAMESPACE} deploy/${GUIDE_NAME}-epp`) re-subscribes to every pod without restarting the model servers, but it drops the index for every pod and rebuilds only each pod's replay window (see [Index recovery](#index-recovery)). On a warm fleet that can cost more routing quality than one broken stream, so fix the pod's configuration first and restart the router only when the index is broadly wrong.
+  The experimental [snapshot option](#optional-configuration) is meant to make such a restart keep full coverage. If render calls fail, re-run the [render check](#2-check-rendering).
 
 <!-- TODO(#2745): define the fail-fast rollout gates (which signals block a rollout, and their thresholds) with the router owners. Per-endpoint KV-event health (llm-d/llm-d-router#1004) is the likely gating signal. -->
 
@@ -605,30 +570,11 @@ kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/
 ```
 <!-- guide:cleanup.modelserver end -->
 
-<!-- guide:cleanup.render start -->
-<!-- variants:start -->
-<details data-when="ACCELERATOR_TYPE=gpu;MODEL_SERVER=sglang">
-<summary><b>NVIDIA GPU · SGLang</b></summary>
-
-<!-- llm-d-cicd:skip start -->
+<!-- guide:cleanup.tokenizer start -->
 ```bash
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
+kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/tokenizer/
 ```
-<!-- llm-d-cicd:skip end -->
-
-</details>
-<details data-when="ACCELERATOR_TYPE=xpu;MODEL_SERVER=sglang">
-<summary><b>Intel XPU · SGLang</b></summary>
-
-<!-- llm-d-cicd:skip start -->
-```bash
-kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-sglang/
-```
-<!-- llm-d-cicd:skip end -->
-
-</details>
-<!-- variants:end -->
-<!-- guide:cleanup.render end -->
+<!-- guide:cleanup.tokenizer end -->
 
 <!-- guide:cleanup.rest start -->
 ```bash

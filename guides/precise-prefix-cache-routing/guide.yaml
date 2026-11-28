@@ -14,7 +14,7 @@ support:
   accelerators:
     gpu:
       label: NVIDIA GPU
-      notes: "Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke` (SGLang uses the dedicated render pool)"
+      notes: "Default. H100 80 GB reference · 2 replicas × TP=2 (4 GPUs) · `INFRA_PROVIDER`: `base`, `gke`"
       model: Qwen/Qwen3-32B
       providers:
         - {name: base, label: "Kubernetes (base)"}
@@ -29,7 +29,7 @@ support:
       engines: {vllm: validated}
     xpu:
       label: Intel XPU
-      notes: "vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16 (SGLang uses the dedicated render pool)"
+      notes: "vLLM: Data Center GPU Max 1550+ · SGLang: Arc Pro B60 · 2 replicas × 1 XPU via DRA · fp16"
       model: Qwen/Qwen3-0.6B
       providers:
         - {name: base, label: "Kubernetes (base)"}
@@ -140,19 +140,18 @@ deploy:
           ${ENGINE_VALUES} \
           -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 
+  # The pool the router tokenizes on: CPU-only `vllm launch render` servers on
+  # the vLLM release, model and rendering flags of the model server beside
+  # them. One overlay per accelerator and model server.
+  tokenizer:
+    - run: |
+        kubectl apply -n ${NAMESPACE} \
+          -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/tokenizer/
+
   modelserver:
     - run: |
         kubectl apply -n ${NAMESPACE} \
           -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}/
-
-  render:
-    # vLLM renders on the model servers through the router's endpoint
-    # discovery, so only SGLang deploys a render pool: a dedicated, GPU-less
-    # vLLM render Deployment, because SGLang has no render endpoints.
-    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [gpu]}
-      run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
-    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [xpu]}
-      run: kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-sglang/
 
   monitoring:
     - when: {MONITORING: ["true"]}
@@ -164,34 +163,23 @@ verify:
       - run: export IP=$(kubectl get service ${GUIDE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
   tests:
     render:
-      - when: {MODEL_SERVER: [vllm]}
-        run: |
-          # Every model server pod must return token IDs for MODEL: the router
-          # renders on each of them in turn. Exits non-zero on the first pod that
-          # does not, e.g. a 404 when vLLM runs without --enable-scale-out.
-          export POD_IPS=$(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME} -o jsonpath='{.items[*].status.podIP}')
+      - run: |
+          # Every tokenizer pod must return token IDs for MODEL: the router
+          # renders on the pool through its Service. Exits non-zero on the
+          # first pod that does not, e.g. a 404 when the pool serves another
+          # model.
+          export POD_IPS=$(kubectl get pods -n ${NAMESPACE} -l app.kubernetes.io/component=tokenizer,app.kubernetes.io/part-of=${GUIDE_NAME} -o jsonpath='{.items[*].status.podIP}')
           kubectl run render-check --rm -i --restart=Never \
             --image=${CURL_TEST_IMAGE} \
             --namespace="${NAMESPACE}" \
             --env="POD_IPS=${POD_IPS}" \
             --env="MODEL=${MODEL}" \
-            -- /bin/sh -c 'test -n "${POD_IPS}" || { echo "FAIL: no model server pods"; exit 1; }
+            -- /bin/sh -c 'test -n "${POD_IPS}" || { echo "FAIL: no tokenizer pods"; exit 1; }
               for ip in ${POD_IPS}; do
                 R=$(curl -sS -X POST "http://${ip}:8000/v1/completions/render" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"render check\", \"max_tokens\": 1}")
                 echo "${R}" | grep -q "\"token_ids\"" || { echo "FAIL: ${ip}: ${R}"; exit 1; }
                 echo "OK: ${ip}"
               done'
-      - when: {MODEL_SERVER: [sglang]}
-        run: |
-          # The render pool must return token IDs for MODEL before requests are routed
-          kubectl run render-check --rm -i --restart=Never \
-            --image=${CURL_TEST_IMAGE} \
-            --namespace="${NAMESPACE}" \
-            --env="GUIDE_NAME=${GUIDE_NAME}" \
-            --env="MODEL=${MODEL}" \
-            -- /bin/sh -c 'R=$(curl -sS -X POST "http://${GUIDE_NAME}-render:8000/v1/completions/render" -H "Content-Type: application/json" -d "{\"model\": \"${MODEL}\", \"prompt\": \"render check\", \"max_tokens\": 1}")
-              echo "${R}" | grep -q "\"token_ids\"" || { echo "FAIL: ${R}"; exit 1; }
-              echo "OK: ${GUIDE_NAME}-render"'
     request:
       - run: |
           kubectl run curl-test --rm -i --restart=Never \
@@ -234,7 +222,7 @@ verify:
       - run: |
           # The router must render a request itself: one more successful render
           # call and no new failed one across a request sent through it. The
-          # render check above calls the model servers directly, so it passes
+          # render check above calls the tokenizer pods directly, so it passes
           # even when the router's own renders fail and it routes every request
           # without cache information.
           kubectl run router-render-check --rm -i --restart=Never \
@@ -283,11 +271,8 @@ verify:
 cleanup:
   modelserver:
     - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/${INFRA_PROVIDER}
-  render:
-    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [gpu]}
-      run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/standalone/
-    - when: {MODEL_SERVER: [sglang], ACCELERATOR_TYPE: [xpu]}
-      run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/render/xpu-sglang/
+  tokenizer:
+    - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/${GUIDE_NAME}/modelserver/${ACCELERATOR_TYPE}/${MODEL_SERVER}/tokenizer/
   rest:
     - run: helm uninstall ${GUIDE_NAME} -n ${NAMESPACE}
     - run: kubectl delete -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/components/monitoring --ignore-not-found=true
