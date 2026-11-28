@@ -175,6 +175,7 @@ jobs:
             echo "precise-prefix-cache-routing: router (${name})"
             echo "========================================"
             echo "--- helm template ---"
+            # shellcheck disable=SC2086
             if ! helm template precise-prefix-cache-routing \
               "oci://ghcr.io/llm-d/charts/llm-d-router-standalone" \
               -f guides/recipes/router/base.values.yaml \
@@ -198,7 +199,7 @@ jobs:
       - name: Dry-run render pool overlays (precise-prefix-cache-routing)
         run: |
           failed=0
-          for overlay in render/standalone render/xpu-sglang; do
+          for overlay in render/standalone render/xpu-sglang render/cpu-sglang; do
             name="render (${overlay})"
             echo ""
             echo "========================================"
