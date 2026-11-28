@@ -1,0 +1,25 @@
+# Signals completion of an approving PR review so `Auto Merge Queue` (`workflow_run`)
+# runs in the base repository context with repository secrets, including on fork PRs.
+# `Auto Merge Queue` cannot listen to `pull_request_review` directly: for fork PRs that
+# event gets a read-only GITHUB_TOKEN and no secrets (the reason `PR Needs Rebase` skips
+# fork PRs on its `pull_request_review` path), so the enqueue would fail.
+
+name: PR Review Gate
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+
+jobs:
+  review-approved:
+    name: Approved PR review submitted
+    if: github.event.review.state == 'approved'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record approval event
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: echo "Approved review submitted for PR ${PR_NUMBER}"

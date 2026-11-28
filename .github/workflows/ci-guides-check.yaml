@@ -11,31 +11,53 @@ name: CI Guides Check
 on:
   pull_request:
     branches: [main]
-    paths:
-      - .github/workflows/ci-guides-check.yaml
-      - .github/scripts/e2e/async-multitenant/**
-      - guides/**
-      - scripts/assigned-issue-reminder.py
-      - scripts/github_api.py
-      - docs/well-lit-paths/guides.yaml
-      - .github/workflows/nightly-e2e-*.yaml
-      - scripts/guide.py
-      - scripts/matrix_common.py
-      - scripts/seed-release-badges.py
-      - scripts/tests/**
-      - .github/scripts/nightly-e2e-verification/**
-      - docs/operations/validation/smoke-test/**
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-guides-check-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  check-changes:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      guides: ${{ steps.filter.outputs.guides }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            guides:
+              - '.github/workflows/ci-guides-check.yaml'
+              - '.github/scripts/e2e/async-multitenant/**'
+              - 'guides/**'
+              - 'scripts/assigned-issue-reminder.py'
+              - 'scripts/github_api.py'
+              - 'docs/well-lit-paths/guides.yaml'
+              - '.github/workflows/nightly-e2e-*.yaml'
+              - 'scripts/guide.py'
+              - 'scripts/matrix_common.py'
+              - 'scripts/seed-release-badges.py'
+              - 'scripts/tests/**'
+              - '.github/scripts/nightly-e2e-verification/**'
+              - 'docs/operations/validation/smoke-test/**'
+
   guides-check:
+    needs: check-changes
+    if: >-
+      !cancelled() &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (needs.check-changes.result == 'success' && needs.check-changes.outputs.guides == 'true')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

@@ -15,10 +15,8 @@ name: CI Verify Component Images
 on:
   pull_request:
     branches: [main]
-    paths:
-      - guides/recipes/modelserver/components/images/**
-      - .github/scripts/list-component-images.py
-      - .github/workflows/ci-verify-component-images.yaml
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 permissions:
@@ -26,12 +24,36 @@ permissions:
   packages: read
 
 concurrency:
-  group: ci-verify-component-images-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  check-changes:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      images: ${{ steps.filter.outputs.images }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            images:
+              - 'guides/recipes/modelserver/components/images/**'
+              - '.github/scripts/list-component-images.py'
+              - '.github/workflows/ci-verify-component-images.yaml'
+
   verify-component-images:
     name: Verify component images are pullable
+    needs: check-changes
+    if: >-
+      !cancelled() &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (needs.check-changes.result == 'success' && needs.check-changes.outputs.images == 'true')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -40,10 +62,10 @@ jobs:
           persist-credentials: false
 
       - name: Checkout base component images
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
           path: .base
           persist-credentials: false
           sparse-checkout: |
@@ -71,6 +93,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify each component image resolves
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           mapfile -t IMAGES < <(python .github/scripts/list-component-images.py)
           declare -A BASE_IMAGES=()
@@ -94,7 +118,7 @@ jobs:
             elif [ -n "${BASE_IMAGES[$img]:-}" ]; then
               echo "| \`${img}\` | ⚠️ Pre-existing unreachable image |" >> "$GITHUB_STEP_SUMMARY"
               echo "::warning::Pre-existing image not pullable: $img"
-            elif [ "${{ github.event_name }}" = "pull_request" ] && [[ "$img" == ghcr.io/llm-d/llm-d-* ]]; then
+            elif { [ "$EVENT_NAME" = "pull_request" ] || [ "$EVENT_NAME" = "merge_group" ]; } && [[ "$img" == ghcr.io/llm-d/llm-d-* ]]; then
               echo "| \`${img}\` | ⏳ Built after merge |" >> "$GITHUB_STEP_SUMMARY"
               echo "::warning::New llm-d image will be verified after its build pipeline publishes it: $img"
             else

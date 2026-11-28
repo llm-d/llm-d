@@ -99,3 +99,6 @@ repos:
     rev: v1.7.12
     hooks:
       - id: actionlint
+        # Align with the shellcheck hook above (--severity=warning) so
+        # pre-existing style/info notices do not block unrelated edits.
+        args: ['-ignore', 'SC[0-9]+:(info|style):']

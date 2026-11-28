@@ -1,9 +1,167 @@
 name: Check Signed Commits
-on: pull_request_target
+
+on:
+  pull_request_target:
+  merge_group:
+    types: [checks_requested]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  # GPG/SSH commit signature verification runs on pull requests only.
+  # Merge queue squash commits are created and signed by GitHub, not by the
+  # PR author's key.
   signed-commits:
+    if: github.event_name == 'pull_request_target'
     uses: llm-d/llm-d-infra/.github/workflows/reusable-signed-commits.yaml@main
     permissions:
       contents: read
       pull-requests: write
+
+  dco-check:
+    name: dco-check
+    if: |
+      github.event_name == 'merge_group' ||
+      (
+        github.event_name == 'pull_request_target' &&
+        !contains(fromJSON('["dependabot[bot]"]'), github.event.pull_request.user.login)
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Verify Signed-off-by trailer matches commit author email (DCO)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          MG_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          MG_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+          MG_HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          is_merge_group=0
+          fallback_pr_number=""
+          declare -A author_cache=()
+
+          if [ "$EVENT_NAME" = "merge_group" ]; then
+            base="$MG_BASE_SHA"
+            head="$MG_HEAD_SHA"
+            is_merge_group=1
+            # The queue branch ref is gh-readonly-queue/<base>/pr-<number>-<sha>.
+            if [[ "$MG_HEAD_REF" =~ /pr-([0-9]+)-[0-9a-f]+$ ]]; then
+              fallback_pr_number="${BASH_REMATCH[1]}"
+            fi
+          else
+            base="$PR_BASE_SHA"
+            head="$PR_HEAD_SHA"
+            # Fetch PR head commit objects without checking out fork code.
+            git fetch --no-tags origin "$head" || git fetch --no-tags origin "refs/pull/${PR_NUMBER}/head"
+          fi
+
+          # GitHub Apps allowed to satisfy DCO by name instead of email:
+          # dependabot writes a Signed-off-by trailer with support@github.com
+          # while authoring commits with its noreply email address.
+          bot_allowlist="dependabot[bot]"
+
+          commits=$(git rev-list "${base}..${head}")
+          if [ -z "$commits" ]; then
+            echo "::error::No commits found in range ${base}..${head}"
+            exit 1
+          fi
+
+          lookup_pr_author() {
+            local num="$1"
+            if [ -z "$num" ]; then
+              return 0
+            fi
+            if [ -z "${author_cache[$num]+x}" ]; then
+              author_cache[$num]=$(gh api "repos/${REPO}/pulls/${num}" --jq '.user.login' 2>/dev/null || true)
+            fi
+            printf '%s' "${author_cache[$num]}"
+          }
+
+          fail=0
+          while IFS= read -r c; do
+            [ -z "$c" ] && continue
+            author_name=$(git show -s --format='%an' "$c")
+            author_email=$(git show -s --format='%ae' "$c")
+            trailers=$(git show -s --format='%(trailers:key=Signed-off-by,valueonly)' "$c")
+            if [ -z "$trailers" ]; then
+              echo "::error::commit $c is missing a Signed-off-by trailer (author email: $author_email)"
+              fail=1
+              continue
+            fi
+
+            pr_author_login=""
+            if [ "$is_merge_group" -eq 1 ]; then
+              subject=$(git show -s --format='%s' "$c")
+              if [[ "$subject" =~ \(#([0-9]+)\)$ ]]; then
+                pr_author_login=$(lookup_pr_author "${BASH_REMATCH[1]}")
+              fi
+              if [ -z "$pr_author_login" ] && [ -n "$fallback_pr_number" ]; then
+                pr_author_login=$(lookup_pr_author "$fallback_pr_number")
+              fi
+            fi
+
+            match=0
+            author_email_lc="${author_email,,}"
+            pr_author_login_lc="${pr_author_login,,}"
+
+            # The merge queue squashes each PR into one commit. Either the
+            # commit author or a Signed-off-by trailer can carry the real email
+            # while the other carries the GitHub noreply email for users with
+            # "keep my email private" enabled. Accept a noreply address on
+            # merge_group only when its embedded login matches the PR author.
+            author_noreply_login=""
+            if [[ "$author_email" =~ ^[0-9]+\+(.+)@users\.noreply\.github\.com$ ]]; then
+              author_noreply_login="${BASH_REMATCH[1],,}"
+            fi
+            if [ "$is_merge_group" -eq 1 ] && [ -n "$author_noreply_login" ] && [ "$author_noreply_login" = "$pr_author_login_lc" ]; then
+              match=1
+            fi
+
+            while IFS= read -r line; do
+              [ -z "$line" ] && continue
+              trailer_email=""
+              # Brackets are included because bot accounts use
+              # <id>+<name>[bot]@users.noreply.github.com.
+              if [[ "$line" =~ ([][A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+) ]]; then
+                trailer_email="${BASH_REMATCH[1]}"
+              fi
+              trailer_email_lc="${trailer_email,,}"
+              if [ "$trailer_email_lc" = "$author_email_lc" ]; then
+                match=1
+              fi
+              if [ "$is_merge_group" -eq 1 ] && [[ "$trailer_email" =~ ^[0-9]+\+(.+)@users\.noreply\.github\.com$ ]]; then
+                trailer_noreply_login="${BASH_REMATCH[1],,}"
+                if [ "$trailer_noreply_login" = "$pr_author_login_lc" ]; then
+                  match=1
+                fi
+              fi
+              case " $bot_allowlist " in
+                *" $author_name "*)
+                  case "$line" in
+                    "$author_name "*) match=1 ;;
+                  esac
+                  ;;
+              esac
+            done <<<"$trailers"
+
+            if [ "$match" -ne 1 ]; then
+              echo "::error::commit $c Signed-off-by email does not match commit author email. expected: $author_email, found: $trailers"
+              fail=1
+            fi
+          done <<<"$commits"
+
+          exit "$fail"

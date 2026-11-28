@@ -1,0 +1,204 @@
+name: Rebase PR
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  rebase:
+    name: Rebase PR on main
+    if: >-
+      github.event.issue.pull_request &&
+      github.event.comment.body == '/rebase'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check commenter has write access
+        id: check-access
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const perm = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: context.payload.comment.user.login,
+            });
+            const level = perm.data.permission;
+            if (!['admin', 'write', 'maintain'].includes(level)) {
+              console.log(`User ${context.payload.comment.user.login} does not have write access (got: ${level}). Skipping.`);
+              core.setOutput('skip', 'true');
+            }
+
+      - name: React to comment
+        if: steps.check-access.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          gh api "repos/${REPO}/issues/comments/${COMMENT_ID}/reactions" \
+            -f content='rocket' --silent
+
+      - name: Get PR details
+        if: steps.check-access.outputs.skip != 'true'
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          PR_JSON=$(gh api "repos/${REPO}/pulls/${ISSUE_NUMBER}")
+          HEAD_REPO=$(printf '%s' "$PR_JSON" | jq -r '.head.repo.full_name')
+          HEAD_REF=$(printf '%s' "$PR_JSON" | jq -r '.head.ref')
+          BASE_REF=$(printf '%s' "$PR_JSON" | jq -r '.base.ref')
+          IS_FORK=$([ "$HEAD_REPO" != "$REPO" ] && echo true || echo false)
+          MAINTAINER_CAN_MODIFY=$(printf '%s' "$PR_JSON" | jq -r '.maintainer_can_modify')
+          {
+            echo "head-repo=${HEAD_REPO}"
+            echo "head-ref=${HEAD_REF}"
+            echo "base-ref=${BASE_REF}"
+            echo "is-fork=${IS_FORK}"
+            echo "maintainer-can-modify=${MAINTAINER_CAN_MODIFY}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check comment postdates PR head
+        if: steps.check-access.outputs.skip != 'true'
+        id: check-date
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_AT: ${{ github.event.comment.created_at }}
+        run: |
+          PUSHED_AT=$(gh api "repos/${REPO}/pulls/${ISSUE_NUMBER}" --jq '.head.repo.pushed_at')
+          pushed_ts=$(date -d "$PUSHED_AT" +%s)
+          comment_ts=$(date -d "$COMMENT_AT" +%s)
+          if [ "$pushed_ts" -gt "$comment_ts" ]; then
+            echo "PR head was pushed after the /rebase comment; skipping to avoid a TOCTOU race."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check fork allows maintainer push
+        if: >-
+          steps.check-access.outputs.skip != 'true' &&
+          steps.check-date.outputs.skip != 'true' &&
+          steps.pr.outputs.is-fork == 'true' &&
+          steps.pr.outputs.maintainer-can-modify != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          gh api "repos/${REPO}/issues/${ISSUE_NUMBER}/comments" \
+            -f body='> /rebase
+
+          Cannot rebase: the PR author has not enabled **Allow edits from maintainers**. Please ask them to enable it in the PR sidebar.' --silent
+          exit 1
+
+      - name: Checkout base repo
+        if: >-
+          steps.check-access.outputs.skip != 'true' &&
+          steps.check-date.outputs.skip != 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.pr.outputs.base-ref }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
+
+      - name: Fetch PR head and rebase
+        if: >-
+          steps.check-access.outputs.skip != 'true' &&
+          steps.check-date.outputs.skip != 'true'
+        id: rebase
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REPO: ${{ steps.pr.outputs.head-repo }}
+          HEAD_REF: ${{ steps.pr.outputs.head-ref }}
+          BASE_REF: ${{ steps.pr.outputs.base-ref }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          HEAD_URL="https://x-access-token:${GH_TOKEN}@github.com/${HEAD_REPO}.git"
+          git remote add head-repo "$HEAD_URL"
+          git fetch head-repo "$HEAD_REF"
+          git checkout -b pr-head "head-repo/$HEAD_REF"
+
+          if git rebase "origin/$BASE_REF"; then
+            echo "result=success" >> "$GITHUB_OUTPUT"
+          else
+            git rebase --abort
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push rebased branch
+        if: >-
+          steps.check-access.outputs.skip != 'true' &&
+          steps.check-date.outputs.skip != 'true' &&
+          steps.rebase.outputs.result == 'success'
+        id: push
+        env:
+          HEAD_REF: ${{ steps.pr.outputs.head-ref }}
+        run: |
+          if git push --force-with-lease head-repo "HEAD:${HEAD_REF}" 2>&1; then
+            echo "result=success" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=failed" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment on success
+        if: >-
+          steps.check-access.outputs.skip != 'true' &&
+          steps.check-date.outputs.skip != 'true' &&
+          steps.rebase.outputs.result == 'success' &&
+          steps.push.outputs.result == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          HEAD_REF: ${{ steps.pr.outputs.head-ref }}
+          BASE_REF: ${{ steps.pr.outputs.base-ref }}
+        run: |
+          body=$(printf '> /rebase\n\nDone — rebased `%s` on `%s`.' "$HEAD_REF" "$BASE_REF")
+          gh api "repos/${REPO}/issues/${ISSUE_NUMBER}/comments" \
+            -f body="$body" --silent
+
+      - name: Comment on conflict
+        if: >-
+          steps.check-access.outputs.skip != 'true' &&
+          steps.check-date.outputs.skip != 'true' &&
+          steps.rebase.outputs.result == 'conflict'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          BASE_REF: ${{ steps.pr.outputs.base-ref }}
+        run: |
+          body=$(printf '> /rebase\n\nRebase failed due to merge conflicts. Please rebase manually:\n```\ngh pr checkout %s\ngit rebase origin/%s\n# resolve conflicts\ngit push --force-with-lease\n```' "$ISSUE_NUMBER" "$BASE_REF")
+          gh api "repos/${REPO}/issues/${ISSUE_NUMBER}/comments" \
+            -f body="$body" --silent
+
+      - name: Comment on push failure
+        if: >-
+          steps.check-access.outputs.skip != 'true' &&
+          steps.check-date.outputs.skip != 'true' &&
+          steps.rebase.outputs.result == 'success' &&
+          steps.push.outputs.result == 'failed'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          gh api "repos/${REPO}/issues/${ISSUE_NUMBER}/comments" \
+            -f body='> /rebase
+
+          Rebase succeeded but push failed. This usually means the PR is from a fork and the author has not enabled **Allow edits from maintainers**, or the fork repo restricts pushes. Please rebase manually.' --silent
