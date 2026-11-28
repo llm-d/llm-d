@@ -90,17 +90,21 @@ deploy:
         kubectl rollout status deployment/${TARGET_DEPLOYMENT} -n ${NAMESPACE} --timeout=15m
 
   # Apply the leaf overlay for the chosen SIGNAL x ENV. The overlay carries ${...}
-  # placeholders (namespace, model, deployment, EPP service, inference pool), so
+  # placeholders for deployment-specific configuration and resource names, so
   # the leaf is built and piped through envsubst before kubectl applies it.
   # Generic Kubernetes uses the bundled kube-prometheus-stack over plain
   # in-cluster HTTP with no client auth; OpenShift uses Thanos Querier + the
   # shared metrics-reader recipe.
   apply_k8s_inflight:
     - when: {SIGNAL: [inflight], ENV: [existing]}
-      run: kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
+      run: |
+        : "${SCALEDOBJECT_NAME:?}" "${HPA_NAME:?}" && \
+          kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL $SCALEDOBJECT_NAME $HPA_NAME' | kubectl apply -f -
   apply_ocp_inflight:
     - when: {SIGNAL: [inflight], ENV: [ocp]}
-      run: kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl apply -f -
+      run: |
+        : "${SCALEDOBJECT_NAME:?}" "${HPA_NAME:?}" && \
+          kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL $SCALEDOBJECT_NAME $HPA_NAME' | kubectl apply -f -
   apply_k8s_queue:
     - when: {SIGNAL: [queue], ENV: [existing]}
       run: |
@@ -198,9 +202,13 @@ cleanup:
   # Deleting the ScaledObject also removes the KEDA-managed HPA. It does not delete
   # the target Deployment or reset its replica count.
   - when: {SIGNAL: [inflight], ENV: [existing]}
-    run: kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
+    run: |
+      : "${SCALEDOBJECT_NAME:?}" "${HPA_NAME:?}" && \
+        kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL $SCALEDOBJECT_NAME $HPA_NAME' | kubectl delete --ignore-not-found=true -f -
   - when: {SIGNAL: [inflight], ENV: [ocp]}
-    run: kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL' | kubectl delete --ignore-not-found=true -f -
+    run: |
+      : "${SCALEDOBJECT_NAME:?}" "${HPA_NAME:?}" && \
+        kubectl kustomize ${OVERLAY_ROOT}/overlays/ocp/inflight | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL $SCALEDOBJECT_NAME $HPA_NAME' | kubectl delete --ignore-not-found=true -f -
   - when: {SIGNAL: [queue], ENV: [existing]}
     run: kubectl kustomize ${OVERLAY_ROOT}/overlays/k8s/queue | envsubst '$NAMESPACE $MODEL $TARGET_DEPLOYMENT $EPP_SERVICE $INFERENCE_POOL $SCALEDOBJECT_NAME $HPA_NAME' | kubectl delete --ignore-not-found=true -f -
   - when: {SIGNAL: [saturation], ENV: [existing]}
