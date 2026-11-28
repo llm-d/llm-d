@@ -223,6 +223,9 @@ If `--managed-otel-scope` is not enabled on your cluster, you can deploy a stand
 </details>
 <!-- tabs:end -->
 
+> [!NOTE]
+> **Exemplars and tail sampling:** the router attaches a trace exemplar to a metric only when the request's span is sampled (head sampling: `router.tracing.sampling.samplerArg`, or the caller's decision when an upstream `traceparent` is sampled; see [Trace Requests](./tracing.md)). The collectors these guides install (Jaeger and GKE recipes) only filter and batch, so the default setup is not affected and this note only matters for a custom collector. If your collector applies tail sampling, it can drop a trace after its exemplar was recorded, and the exemplar link then opens a trace that was never exported. If you need tail sampling, expect some exemplar links to open an empty trace.
+
 For full tracing configuration across vLLM, the routing proxy, and the EPP, see [Trace Requests](./tracing.md).
 
 ## Cleanup
