@@ -42,6 +42,7 @@ llm-d-router                                      1      30s
 llm-d-performance-kv-cache                        1      30s
 llm-d-kv-cache-index                              1      30s
 llm-d-pd-coordinator-metrics                      1      30s
+llm-d-coordinator                                 1      30s
 llm-d-batch-gateway-apiserver                     1      30s
 llm-d-batch-gateway-processor                     1      30s
 llm-d-batch-gateway-gc                            1      30s
@@ -61,6 +62,7 @@ Or import individual dashboard JSON files manually from `guides/recipes/observab
 | `llm-d-performance-kv-cache.json` | Performance metrics including KV cache utilization |
 | `llm-d-kv-cache-index.json` | KV-cache index throughput, hit rate, lookup and tokenization latency, and KV-events subscriber health for precise prefix-cache routing |
 | `llm-d-pd-coordinator-metrics.json` | Prefill/decode disaggregation metrics |
+| `llm-d-coordinator.json` | llm-d Coordinator component metrics (`llm_d_coordinator_*`): request rates, error ratio, step errors, upstream calls, execution paths, and request latency |
 | `llm-d-router.json` | llm-d Router (EPP) metrics: inference pool, inference objective, and flow control |
 | `llm-d-batch-gateway-apiserver.json` | Batch Gateway API server request rate, latency, and in-flight requests |
 | `llm-d-batch-gateway-processor.json` | Batch Gateway job throughput, queue wait, worker saturation, and token usage |
