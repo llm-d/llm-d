@@ -60,7 +60,8 @@ decode                  5m
 <details>
 <summary><b>GKE (Managed Prometheus)</b></summary>
 
-When [GKE automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) is enabled (`--auto-monitoring-scope=ALL`; see [GKE Monitoring & Telemetry](../../infrastructure/providers/gke/README.md#monitoring--telemetry)), GKE automatically detects **vLLM** and **SGLang** model server workloads and provisions `PodMonitoring` (`monitoring.googleapis.com/v1`) resources labeled `source: gke-auto-monitoring` in your workload namespace. You do **not** need to manually create `PodMonitor` resources or apply the Kustomize monitoring component for vLLM or SGLang.
+When [GKE automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) is enabled (`--auto-monitoring-scope=ALL`; see [GKE Monitoring & Telemetry](../../infrastructure/providers/gke/README.md#monitoring--telemetry)), GKE automatically detects **vLLM** and **SGLang** model server workloads and provisions `PodMonitoring` (`monitoring.googleapis.com/v1`) resources labeled `source: gke-auto-monitoring` in your workload namespace.
+You do **not** need to manually create `PodMonitor` resources or apply the Kustomize monitoring component for vLLM or SGLang.
 
 Verify the auto-generated `PodMonitoring` resource in your namespace:
 
@@ -87,7 +88,7 @@ spec:
   selector:
     matchLabels:
       llm-d.ai/guide: optimized-baseline
-      llm-d.ai/role: decode
+      llm-d.ai/role: prefill-decode
   endpoints:
     - port: modelserver
       path: /prometheus/metrics
@@ -124,7 +125,8 @@ epp-servicemonitor      5m
 <details>
 <summary><b>GKE (Managed Prometheus)</b></summary>
 
-GKE automatic application monitoring creates `PodMonitoring` resources for model servers (`vLLM` and `SGLang`), not for the EPP deployment (`*-epp`). Layer [`guides/recipes/router/features/monitoring-gke.values.yaml`](../../../guides/recipes/router/features/monitoring-gke.values.yaml) when installing or upgrading the router Helm chart (add `--set router.monitoring.provider.gmp.autopilot=true` on GKE Autopilot) so the chart creates an authenticated `PodMonitoring` (`monitoring.googleapis.com/v1`) for the EPP (`:9090/metrics`), along with the metrics-reader `ServiceAccount`, token `Secret`, and RBAC bindings for `gmp-system`.
+GKE automatic application monitoring creates `PodMonitoring` resources for model servers (`vLLM` and `SGLang`), not for the EPP deployment (`*-epp`). Layer [`guides/recipes/router/features/monitoring-gke.values.yaml`](../../../guides/recipes/router/features/monitoring-gke.values.yaml) when installing or upgrading the router Helm chart (add `--set router.monitoring.provider.gmp.autopilot=true` on GKE Autopilot) so the chart creates an authenticated `PodMonitoring` (`monitoring.googleapis.com/v1`) for the EPP (`:9090/metrics`),
+along with the metrics-reader `ServiceAccount`, token `Secret`, and RBAC bindings for `gmp-system`.
 
 Verify the EPP `PodMonitoring` resource exists:
 
@@ -190,7 +192,7 @@ For ready-to-run queries, see the [PromQL Query Reference](./promql.md).
 3. Confirm pods expose metrics:
 
    ```bash
-   MODEL_POD=$(kubectl get pods -n ${NAMESPACE} -l llm-d.ai/role=decode -o jsonpath='{.items[0].metadata.name}')
+   MODEL_POD=$(kubectl get pods -n ${NAMESPACE} -l 'llm-d.ai/role in (decode,prefill-decode)' -o jsonpath='{.items[0].metadata.name}')
    kubectl port-forward -n ${NAMESPACE} ${MODEL_POD} 8000:8000
    curl http://localhost:8000/metrics | head -20
    ```

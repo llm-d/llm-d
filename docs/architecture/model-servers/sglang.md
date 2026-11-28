@@ -12,7 +12,7 @@ metadata:
     llm-d.ai/engine-type: sglang # Required so the EPP maps SGLang metric names
     llm-d.ai/inferenceServing: "true"
     llm-d.ai/model: Qwen-Qwen3-32B
-    llm-d.ai/role: decode # prefill, decode, or prefill-decode
+    llm-d.ai/role: prefill-decode # prefill-decode (monolithic), or prefill / decode (P/D)
 ```
 
 ## EPP <-> SGLang Protocol & Metrics Reporting

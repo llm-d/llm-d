@@ -120,7 +120,7 @@ class Config:
         self.harness_memory_limit = env("HARNESS_MEMORY_LIMIT", "4Gi")
         self.sample_interval = float(env("SAMPLE_INTERVAL_S", "5"))
         # The guide's model server overlay (modelserver/) carries these labels.
-        self.vllm_selector = env("VLLM_SELECTOR", "llm-d.ai/guide=async-multitenant,llm-d.ai/role=decode")
+        self.vllm_selector = env("VLLM_SELECTOR", "llm-d.ai/guide=async-multitenant,llm-d.ai/role=prefill-decode")
         self.vllm_port = env("VLLM_PORT", "8000")
         # Which of the guide's router values the deploy script installed (it
         # reads the same AMT_FLOW_CONTROL setting); capacity and the async-only

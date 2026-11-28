@@ -114,6 +114,11 @@ Note that both the prefill and decode endpoints are part of one `InferencePool`.
 > [!NOTE]
 > To use a different label key, replace the role-specific filters with named `label-selector-filter` plugins in the `prefill` and `decode` profiles. Apply the same labels to the model-server Pods and keep the profile names `prefill` and `decode`; the `disagg-profile-handler` uses those names when it selects the profile.
 
+The guides label monolithic (single-stage) model servers `prefill-decode`, since they run both phases. A pod labeled `decode` is treated as decode-only: with `addEstimatedOutputTokens: true`, the `inflight-load-producer` charges it only the estimated output when a prefill worker takes the prompt.
+
+> [!NOTE]
+> Monolithic guide deployments created before this change carry `llm-d.ai/role: decode`, including in the Deployment's selector. A Deployment's selector is immutable, so `kubectl apply` of the updated manifests fails with `field is immutable`: delete the model server Deployment (for example `kubectl delete deployment -n ${NAMESPACE} -l llm-d.ai/guide=${GUIDE_NAME},llm-d.ai/role=decode`) and apply again.
+
 ### Routing Proxy Sidecar
 
 The Routing Proxy is deployed as a sidecar in each decode pod, with a two-fold role:
@@ -125,8 +130,8 @@ The Routing Proxy is deployed as a sidecar in each decode pod, with a two-fold r
 
 When a request arrives, the sidecar inspects a routing header set by the proxy:
 
-| Header | Purpose |
-|---|---|
+| Header                        | Purpose                                                            |
+|-------------------------------|--------------------------------------------------------------------|
 | `x-llm-d-prefiller-host-port` | One or more prefill pod addresses (comma-separated or multi-value) |
 
 Based on which headers are present, the sidecar selects one of two execution paths:
@@ -155,11 +160,11 @@ vLLM and SGLang both support multiple KV transfer engines - in llm-d we currentl
 
 NIXL provides a standardized API for transferring memory between remote instances offering multiple backends (e.g. UCX, UCCL, libfabric) each of which support multiple underlying transports (NVLink, RoCE, IB, EFA, etc).
 
-|             | IB | RoCE | TCP-X | EFA |
-|-------------|:--:|:----:|:-----:|:---:|
-| **UCX**     | ✓  |  ✓   |       |     |
-| **UCCL**    | ✓  |  ✓   |   ✓   |  ✓  |
-| **libfabric**|   |      |       |  ✓  |
+|               | IB | RoCE | TCP-X | EFA |
+|---------------|:--:|:----:|:-----:|:---:|
+| **UCX**       | ✓  |  ✓   |       |     |
+| **UCCL**      | ✓  |  ✓   |   ✓   |  ✓  |
+| **libfabric** |    |      |       |  ✓  |
 
 > [!NOTE]
 > UCX also supports transfer via TCP and NVLINK. TCP is extremely slow and is targeted for local development. NVLINK transfer is used for local development and cannot be used in Kubernetes deployments as it cannot cross pod boundaries.
