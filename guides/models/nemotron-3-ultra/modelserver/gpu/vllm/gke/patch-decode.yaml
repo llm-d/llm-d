@@ -16,8 +16,6 @@ spec:
                 gke-gcsfuse/cpu-limit: "0"
                 gke-gcsfuse/ephemeral-storage-limit: "0"
             spec:
-              # Assign your GKE Workload Identity Service Account
-              serviceAccountName: agentic-serving-gpu-vllm-sa
               containers:
                 - name: modelserver
                   command: ["vllm", "serve"]

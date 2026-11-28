@@ -52,24 +52,24 @@ To make your Cloud Storage buckets accessible by your GKE cluster, authenticate 
 
 2. Get credentials for your cluster:
 
-```bash
-gcloud container clusters get-credentials <CLUSTER_NAME> \
-    --location=<LOCATION>
-```
+   ```bash
+   gcloud container clusters get-credentials <CLUSTER_NAME> \
+       --location=<LOCATION>
+   ```
 
 3. Create a namespace to use for the [Kubernetes ServiceAccount](https://kubernetes.io/docs/concepts/security/service-accounts/). You can also use the default namespace or any existing namespace.
 
-```bash
-kubectl create namespace <NAMESPACE>
-```
+   ```bash
+   kubectl create namespace <NAMESPACE>
+   ```
 
-4. Grant one of the IAM roles for Cloud Storage to the `agentic-serving-gpu-vllm-sa` Kubernetes ServiceAccount created by the GKE Kustomize overlay:
+4. Grant one of the IAM roles for Cloud Storage to the `pd-disagg-vllm` Kubernetes ServiceAccount created by the GKE Kustomize overlay:
 
-```bash
-gcloud storage buckets add-iam-policy-binding gs://llm-models \
-    --member "principal://iam.googleapis.com/projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/<PROJECT_ID>.svc.id.goog/subject/ns/<NAMESPACE>/sa/agentic-serving-gpu-vllm-sa" \
-    --role "<ROLE_NAME>"
-```
+   ```bash
+   gcloud storage buckets add-iam-policy-binding gs://llm-models \
+       --member "principal://iam.googleapis.com/projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/<PROJECT_ID>.svc.id.goog/subject/ns/<NAMESPACE>/sa/pd-disagg-vllm" \
+       --role "<ROLE_NAME>"
+   ```
 
 For more detailed information, check <https://docs.cloud.google.com/kubernetes-engine/docs/how-to/cloud-storage-fuse-csi-driver-setup#authentication>
 
@@ -77,23 +77,23 @@ For more detailed information, check <https://docs.cloud.google.com/kubernetes-e
 
 1. Make sure you have `Hugging Face CLI` installed. Otherwise, install it
 
-```bash
-curl -LsSf https://hf.co/cli/install.sh | bash
-```
+   ```bash
+   curl -LsSf https://hf.co/cli/install.sh | bash
+   ```
 
 2. Download the model from HuggingFace to your local disk first
 
-```bash
-hf download RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block \
-  --local-dir ./NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block \
-  --token <YOUR_HF_TOKEN>
-```
+   ```bash
+   hf download RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block \
+     --local-dir ./NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block \
+     --token <YOUR_HF_TOKEN>
+   ```
 
 3. Upload to GCS
 
-```bash
-gcloud storage cp -r ./NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block gs://llm-models/RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block
-```
+   ```bash
+   gcloud storage cp -r ./NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block gs://llm-models/RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block
+   ```
 
 ## Deploy the Model Server
 
