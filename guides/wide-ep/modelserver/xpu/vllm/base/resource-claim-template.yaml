@@ -12,3 +12,7 @@ spec:
           exactly:
             deviceClassName: gpu.intel.com
             count: 8
+        - name: nic
+          exactly:
+            deviceClassName: dranet-rdma
+            count: 1

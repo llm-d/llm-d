@@ -1,3 +1,11 @@
+- op: test
+  path: /spec/spec/devices/requests/0/name
+  value: intel
 - op: replace
   path: /spec/spec/devices/requests/0/exactly/count
   value: 2
+- op: test
+  path: /spec/spec/devices/requests/1/name
+  value: nic
+- op: remove
+  path: /spec/spec/devices/requests/1
