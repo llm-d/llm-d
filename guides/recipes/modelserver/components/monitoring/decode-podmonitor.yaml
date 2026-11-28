@@ -12,3 +12,9 @@ spec:
     - port: "modelserver"
       path: /metrics
       interval: 30s
+    # The routing sidecar's own /metrics, served when it runs with
+    # --metrics-port. Decode pods without a routing sidecar have no such port
+    # and are skipped.
+    - port: "sc-metrics"
+      path: /metrics
+      interval: 30s

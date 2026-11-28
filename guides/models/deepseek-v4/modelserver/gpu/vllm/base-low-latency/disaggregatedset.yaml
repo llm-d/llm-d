@@ -1,3 +1,6 @@
+# The role sequence is not indented under its key, while the sequences nested
+# in the pod spec are. Making them uniform would reindent the whole file.
+# yamllint disable rule:indentation
 apiVersion: disaggregatedset.x-k8s.io/v1
 kind: DisaggregatedSet
 metadata:
@@ -285,10 +288,14 @@ spec:
                   - --zap-log-level=1
                   - --secure-serving=false
                   - --enable-prefiller-sampling
+                  - --metrics-port=9095
                 imagePullPolicy: Always
                 ports:
                   - containerPort: 8000
                     name: sidecar
+                    protocol: TCP
+                  - containerPort: 9095
+                    name: sc-metrics
                     protocol: TCP
                 image: REPLACE_ROUTING_SIDECAR_IMAGE
                 resources: {}

@@ -42,9 +42,13 @@ patches:
                           - --ec-connector=ec-nixl
                           - --zap-log-level=1
                           - --secure-serving=false
+                          - --metrics-port=9095
                         ports:
                           - name: sidecar
                             containerPort: 8000
+                            protocol: TCP
+                          - name: sc-metrics
+                            containerPort: 9095
                             protocol: TCP
                         resources: {}
                         restartPolicy: Always
