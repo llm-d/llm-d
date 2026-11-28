@@ -11,7 +11,7 @@ Flow Control enables intelligent request queuing at the llm-d Router level. Trad
   * Certain tenants are **higher-priority** than others (e.g. paid vs unpaid).
   * Certain requests have **different SLOs** than others (e.g. batch vs online).
   * Certain tenants are more active than others, so **fairness** between them matters.
-* **No-Regret Scheduling**: Hold requests during peak saturation instead of committing them to a server's local queue where they become stuck. By delaying dispatch until load subsides, the EPP ensures requests land on the best available resource.
+* **No-Regret Scheduling**: Hold requests during peak saturation instead of committing them to a server's local queue where they become stuck. By delaying dispatch until load subsides, the EPP ensures requests land on the best available resource and prevents prefix-cache cascading overload during partial outages.
 
 ### How it Works
 
@@ -184,7 +184,7 @@ each of the EPP and Envoy containers, so 8 vCPU and 16 GiB per pod. A pod stuck 
 with `Insufficient cpu` needs a node with the pod's full CPU request allocatable.
 
 <details>
-<summary><h4>Gateway Mode</h4></summary>
+<summary><b>Gateway Mode</b></summary>
 
 To use a Kubernetes Gateway managed proxy rather than the standalone version, follow these steps instead of applying the previous Helm chart:
 
@@ -222,7 +222,7 @@ kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/gpu/vllm/${
 <!-- guide:deploy.modelserver end -->
 
 <details>
-<summary><h4>AMD ROCm</h4></summary>
+<summary><b>AMD ROCm</b></summary>
 
 Flow Control also runs on the Optimized Baseline guide's AMD vLLM model server
 (2 replicas, TP=2, `Qwen/Qwen3-32B` on AMD Instinct MI355X). Render the AMD
@@ -239,9 +239,10 @@ kubectl kustomize ${REPO_ROOT}/guides/optimized-baseline/modelserver/amd/vllm/${
 </details>
 
 <details>
-<summary><h4>Intel XPU</h4></summary>
+<summary><b>Intel XPU</b></summary>
 
-Flow Control also runs on the Optimized Baseline guide's Intel XPU model server (2 × vLLM, one Intel Data Center GPU Max 1550+ per pod, `Qwen/Qwen3-0.6B`). Its CI runners are single-XPU-per-pod, so it does not carry the GPU path's TP=2 / `Qwen3-32B` configuration — the [Default Configuration](#default-configuration) table above does not apply as-is; use `Qwen/Qwen3-0.6B` and 2 replicas for this path instead. Override `MODEL_NAME` before deploying, since every verification/benchmark command below sends its request to `${MODEL_NAME}`, and the default (`Qwen/Qwen3-32B`) is not the model this overlay loads:
+Flow Control also runs on the Optimized Baseline guide's Intel XPU model server (2 × vLLM, one Intel Data Center GPU Max 1550+ per pod, `Qwen/Qwen3-0.6B`). Its CI runners are single-XPU-per-pod, so it does not carry the GPU path's TP=2 / `Qwen3-32B` configuration — the [Default Configuration](#default-configuration) table above does not apply as-is; use `Qwen/Qwen3-0.6B` and 2 replicas for this path instead.
+Override `MODEL_NAME` before deploying, since every verification/benchmark command below sends its request to `${MODEL_NAME}`, and the default (`Qwen/Qwen3-32B`) is not the model this overlay loads:
 
 ```bash
 export MODEL_NAME="Qwen/Qwen3-0.6B"
@@ -282,7 +283,7 @@ kubectl apply -n ${NAMESPACE} -k ${REPO_ROOT}/guides/recipes/modelserver/compone
 
 ### 1. Get the IP of the Proxy
 
-**Standalone Mode**
+#### Standalone Mode
 
 <!-- guide:verify.endpoint.standalone start -->
 ```bash
@@ -335,7 +336,9 @@ echo "maxConcurrency: ${MAX_CONCURRENCY}"   # expect the integer set in the valu
 ```
 <!-- guide:verify.tests.max_concurrency end -->
 
-**Grant read access to the EPP metrics endpoint.** By default (`router.monitoring.prometheus.auth.enabled: true`), the EPP authenticates every metrics scrape against the Kubernetes API: a `TokenReview` on the caller's bearer token, then a `SubjectAccessReview` on the `/metrics` URL (note: if you enabled `monitoring.values.yaml` in [Step 1](#1-deploy-the-router), it sets `--metrics-endpoint-auth=false`, making the RBAC grants below a harmless no-op). While the Helm chart grants the EPP's service account (`${GUIDE_NAME}-epp`) permission to run those reviews, it only adds the `/metrics` reader rule when `router.monitoring.prometheus.enabled` is set (which also creates a `ServiceMonitor`), and binds it to `${GUIDE_NAME}-epp` rather than `default`. Grant the debug pod's `default` service account permission to read `/metrics` (and bind `system:auth-delegator` to `${GUIDE_NAME}-epp` as a fallback if chart RBAC was disabled):
+**Grant read access to the EPP metrics endpoint.** By default (`router.monitoring.prometheus.auth.enabled: true`), the EPP authenticates every metrics scrape against the Kubernetes API: a `TokenReview` on the caller's bearer token, then a `SubjectAccessReview` on the `/metrics` URL (note: if you enabled `monitoring.values.yaml` in [Step 1](#1-deploy-the-router), it sets `--metrics-endpoint-auth=false`, making the RBAC grants below a harmless no-op).
+While the Helm chart grants the EPP's service account (`${GUIDE_NAME}-epp`) permission to run those reviews, it only adds the `/metrics` reader rule when `router.monitoring.prometheus.enabled` is set (which also creates a `ServiceMonitor`), and binds it to `${GUIDE_NAME}-epp` rather than `default`.
+Grant the debug pod's `default` service account permission to read `/metrics` (and bind `system:auth-delegator` to `${GUIDE_NAME}-epp` as a fallback if chart RBAC was disabled):
 
 <!-- guide:verify.tests.metrics_rbac start -->
 ```bash
@@ -431,7 +434,8 @@ curl -X POST http://${IP}/v1/completions \
 > [!WARNING]
 > **Trust Boundary**: In a production system, allowing end-users to self-assert their tenant ID or traffic priority (`premium-traffic`) is an abuse vector.
 >
-> **Production Pattern**: Your ingress API Gateway (or an Envoy `ext_authz` filter) should be configured to automatically strip any incoming `x-llm-d-*` headers, plus the deprecated EPP-managed aliases listed in the [EPP HTTP headers reference](../../docs/api-reference/epp-http-headers.md), from external traffic. Gateway API Inference Extension (GAIE) endpoint picker protocol headers such as `x-gateway-destination-endpoint*` are not part of this stripping rule. After stripping, validate the user's API Key or JWT, extract their tier/tenant from the token claims, and securely inject the authoritative `x-llm-d-inference-fairness-id` and `x-llm-d-inference-objective` headers before passing the request to the EPP.
+> **Production Pattern**: Your ingress API Gateway (or an Envoy `ext_authz` filter) should be configured to automatically strip any incoming `x-llm-d-*` headers, plus the deprecated EPP-managed aliases listed in the [EPP HTTP headers reference](../../docs/api-reference/epp-http-headers.md), from external traffic. Gateway API Inference Extension (GAIE) endpoint picker protocol headers such as `x-gateway-destination-endpoint*` are not part of this stripping rule.
+> After stripping, validate the user's API Key or JWT, extract their tier/tenant from the token claims, and securely inject the authoritative `x-llm-d-inference-fairness-id` and `x-llm-d-inference-objective` headers before passing the request to the EPP.
 
 #### 3. Verify the Classification
 
@@ -570,6 +574,207 @@ To verify backpressure management, you must overwhelm the pool's capacity. Becau
     kubectl rollout status deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=1800s
     ```
 
+### Use Case 3: Prefix-Cache Cascade Protection
+
+On long-context, prefix-cache-heavy workloads (`90%+` cache hit rate) where warm cluster throughput exceeds cold prefill capacity by `3×–5×`, operating in the bistable window (`Q_cold < Q_test < Q_warm`) during a transient failure such as a partial pod crash can turn `prefix-cache-affinity-filter`'s `load_override` (triggered past `maxTTFTPenaltyMs`, default `5000 ms`) into a self-sustaining cascading overload ([llm-d-router#4042](https://github.com/llm-d/llm-d-router/issues/4042)):
+
+1. Without Flow Control, excess requests spill directly into surviving vLLM pods' local waiting queues.
+2. Deep per-pod waiting queues continuously breach `maxTTFTPenaltyMs`, firing sustained `load_override` storms onto newly recreated cold pods.
+3. Unbounded cold prefills thrash KV caches across the entire pool, depressing cluster throughput below `Q_test` and locking the pool into runaway `load_override` saturation even after all pods recover.
+
+Enabling **EPP Flow Control** breaks this feedback loop by holding excess requests upstream in EPP memory. Because per-pod vLLM waiting queues stay bounded, any `load_override` that fires during a transient spike remains **bounded and self-damping** — cold pods digest those prefills cleanly without KV thrashing, and the cluster recovers instead of cascading:
+
+```mermaid
+flowchart LR
+   subgraph On["Flow Control ON (Cascade Broken)"]
+        direction LR
+        E2["Excess Held in EPP Queue"] --> G2["Bounded vLLM GPU Queue"]
+        G2 --> O2["Bounded, Self-Damping load_override"]
+        O2 --> W2["Cache Recovers & Queue Drains"]
+    end
+
+    subgraph Off["Flow Control OFF (Cascade Loop)"]
+        direction LR
+        Q1["Deep vLLM Waiting Queue"] --> O1["Runaway load_override"]
+        O1 --> C1["Cold Prefill Flood & KV Eviction"]
+        C1 --> Q1
+    end
+
+```
+
+#### 1. Deploy the Cascade-Protection Router Profile
+
+Use [router/flow-control-cascade-protection.values.yaml](./router/flow-control-cascade-protection.values.yaml), which combines the [Optimized Baseline](../optimized-baseline/README.md) scheduling stack (`approx-prefix-cache-producer`, `inflight-load-producer`, `prefix-cache-affinity-filter`, `token-load-scorer`) with EPP Flow Control and the three priority bands from [objectives.yaml](./objectives.yaml) (`100`, `0`, `-10`):
+
+```bash
+helm upgrade --install ${GUIDE_NAME} \
+    ${ROUTER_STANDALONE_CHART} \
+    -f ${REPO_ROOT}/guides/recipes/router/base.values.yaml \
+    -f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/flow-control-cascade-protection.values.yaml \
+    ${EXTRA_HELM_ARGS} \
+    -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
+
+kubectl rollout status deployment/${GUIDE_NAME}-epp -n ${NAMESPACE} --timeout=300s
+```
+
+> [!NOTE]
+>
+> * [router/flow-control-cascade-protection.values.yaml](./router/flow-control-cascade-protection.values.yaml) uses `approx-prefix-cache-producer` so it works directly with this guide's default model servers (no ZMQ KV-event configuration required). For ZMQ-backed exact KV-block tracking, apply the same `flowControl` section on top of the [Precise Prefix Cache Routing](../precise-prefix-cache-routing/README.md) guide.
+> * This profile uses `utilization-detector` (`queueDepthThreshold: 8`, `kvCacheUtilThreshold: 0.85`) with zero-shedding buffering defaults (`defaultRequestTTL: "0s"`, generous band limits) so Flow Control bounds GPU queues without cache-blind drops. For production deployments, see [Tune Flow Control Concurrency](../../docs/operations/traffic/flow-control-tuning.md) to evaluate `concurrency-detector` (`concurrencyMode: hybrid`) and set `defaultRequestTTL` below your client timeout.
+
+#### 2. Verify Cascade Mitigation Under Overload
+
+This verification reproduces the pod-crash lifecycle on the guide's default **2 replicas (4 GPUs)**: warm two distinct long prefixes across the two pods (`Prefix A` on Pod 1, `Prefix B` on Pod 2), force-delete one pod so its prefix turns into real `no_match` cold misses during the outage, and drive mixed traffic both **during the outage** and **immediately after the replacement pod comes back Ready** (1 warm survivor + 1 cold recreated pod).
+
+> [!NOTE]
+>
+> On larger clusters (e.g., `4` or `8` replicas), force-deleting half of the model server pods reproduces the same failure mode at stronger multi-pod overload ratios.
+
+1. **Apply [objectives.yaml](./objectives.yaml)** (if not already applied in Use Case 1), confirm both model server replicas are Ready (`kubectl get pods -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE}`), and open the `curl-debug` shell from [Proof of Queuing](#3-proof-of-queuing).
+
+2. **Prepare two distinct long shared prefixes (~9k–10k tokens each) and mixed burst payloads** inside `curl-debug`. Each burst request shares ~88% of either `Prefix A` or `Prefix B` (above `affinityThreshold: 0.80`) plus a unique ~1,500-token question suffix:
+
+    ```bash
+    awk 'BEGIN{for(i=1;i<=5000;i++) printf "alpha%d ", i%1000}' > /tmp/prefix_a.txt
+    awk 'BEGIN{for(i=1;i<=5000;i++) printf "beta%d ", i%1000}' > /tmp/prefix_b.txt
+
+    jq -Rs --arg m "${MODEL_NAME}" \
+      '{model: $m, prompt: (. + "Warmup A."), max_tokens: 100, ignore_eos: true}' \
+      /tmp/prefix_a.txt > /tmp/warmup_a.json
+    jq -Rs --arg m "${MODEL_NAME}" \
+      '{model: $m, prompt: (. + "Warmup B."), max_tokens: 100, ignore_eos: true}' \
+      /tmp/prefix_b.txt > /tmp/warmup_b.json
+
+    for i in $(seq 1 60); do
+      PREF=/tmp/prefix_a.txt
+      [ $((i % 2)) -eq 0 ] && PREF=/tmp/prefix_b.txt
+      SUF=$(awk -v id="$i" 'BEGIN{for(j=1;j<=700;j++) printf "q%d_%d ", id, j}')
+      jq -Rs --arg m "${MODEL_NAME}" --arg suf "$SUF" \
+        '{model: $m, prompt: (. + $suf), max_tokens: 300, ignore_eos: true}' \
+        "${PREF}" > "/tmp/req_${i}.json"
+    done
+    ```
+
+3. **Warm both pods concurrently** so `token-load-scorer` places `Prefix A` on one replica and `Prefix B` on the other (launching `warmup_b` slightly after `warmup_a` while the first pod is busy prefilling):
+
+    ```bash
+    curl -s -o /dev/null -w "warmup_a: %{http_code}\n" --max-time 120 -X POST \
+      -H "Content-Type: application/json" \
+      -H "x-llm-d-inference-fairness-id: tenant-a" \
+      -H "x-llm-d-inference-objective: standard-traffic" \
+      -d @/tmp/warmup_a.json http://${IP}/v1/completions &
+    sleep 0.5
+    curl -s -o /dev/null -w "warmup_b: %{http_code}\n" --max-time 120 -X POST \
+      -H "Content-Type: application/json" \
+      -H "x-llm-d-inference-fairness-id: tenant-a" \
+      -H "x-llm-d-inference-objective: standard-traffic" \
+      -d @/tmp/warmup_b.json http://${IP}/v1/completions &
+    wait
+    ```
+
+4. **Force-delete 1 of the 2 model server pods** from your **host terminal** to trigger a 50% capacity crash (Kubernetes immediately starts a cold replacement pod):
+
+    ```bash
+    VICTIM_POD=$(kubectl get pods -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} \
+        -o jsonpath='{.items[0].metadata.name}')
+    echo "Deleting pod: ${VICTIM_POD}"
+    kubectl delete pod "${VICTIM_POD}" -n "${NAMESPACE}" --grace-period=0 --force
+    ```
+
+5. **Wave 1 (Outage) — drive mixed `Prefix A` + `Prefix B` load while only 1 pod is Ready.** Back in `curl-debug`, send 30 concurrent mixed requests while the replacement pod is still booting. Half match the surviving pod's warm prefix and half become real `no_match` cold misses for the crashed pod's prefix, causing EPP Flow Control to buffer the surge upstream:
+
+    ```bash
+    : > /tmp/codes_outage.txt
+    for i in $(seq 1 30); do
+      curl -s -o /dev/null -w "%{http_code}\n" --max-time 300 -X POST \
+        -H "Content-Type: application/json" \
+        -H "x-llm-d-inference-fairness-id: tenant-a" \
+        -H "x-llm-d-inference-objective: standard-traffic" \
+        -d @"/tmp/req_${i}.json" http://${IP}/v1/completions >> /tmp/codes_outage.txt &
+    done
+
+    TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+    PEAK_OUTAGE=0
+    for i in $(seq 1 20); do
+      Q=$(curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metrics \
+        | awk '/llm_d_epp_flow_control_queue_size/ {s+=$2} END {print s+0}')
+      [ "$Q" -gt "$PEAK_OUTAGE" ] && PEAK_OUTAGE=$Q
+      sleep 1
+    done
+    wait
+    echo "Wave 1 (outage) HTTP summary:" && sort /tmp/codes_outage.txt | uniq -c
+    echo "Wave 1 peak flow-control queue depth: ${PEAK_OUTAGE} (expected > 0)"
+    ```
+
+6. **Wait for the replacement pod to become Ready** from your **host terminal** (now the cluster has 1 warm surviving pod + 1 cold recreated pod):
+
+    ```bash
+    kubectl rollout status deployment -l llm-d.ai/guide=${GUIDE_NAME} -n ${NAMESPACE} --timeout=1800s
+    ```
+
+7. **Wave 2 (Post-Recovery) — verify cascade mitigation and clean drain.** Back in `curl-debug`, fire all 60 mixed requests across the warm survivor + cold recreated pod and inspect queue drain and affinity decisions:
+
+    ```bash
+    : > /tmp/codes_recovery.txt
+    for i in $(seq 1 60); do
+      curl -s -o /dev/null -w "%{http_code}\n" --max-time 300 -X POST \
+        -H "Content-Type: application/json" \
+        -H "x-llm-d-inference-fairness-id: tenant-a" \
+        -H "x-llm-d-inference-objective: standard-traffic" \
+        -d @"/tmp/req_${i}.json" http://${IP}/v1/completions >> /tmp/codes_recovery.txt &
+    done
+
+    TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+    PEAK_REC=0
+    for i in $(seq 1 20); do
+      Q=$(curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metrics \
+        | awk '/llm_d_epp_flow_control_queue_size/ {s+=$2} END {print s+0}')
+      [ "$Q" -gt "$PEAK_REC" ] && PEAK_REC=$Q
+      sleep 1
+    done
+    wait
+
+    END_Q=$(curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metrics \
+      | awk '/llm_d_epp_flow_control_queue_size/ {s+=$2} END {print s+0}')
+    echo "Wave 2 (post-recovery) HTTP summary:" && sort /tmp/codes_recovery.txt | uniq -c
+    echo "Wave 2 flow-control queue depth: peak=${PEAK_REC}, drained=${END_Q} (expected 0)"
+
+    curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metrics \
+      | grep llm_d_epp_prefix_cache_affinity_filter_decisions_total
+    ```
+
+    A healthy, non-cascading recovery shows:
+
+    * **Upstream absorption and clean drain:** Flow Control absorbs the outage and recovery bursts (`PEAK_OUTAGE > 0`), drains cleanly back to `drained=0`, and completes all requests with `200`.
+    * **Bounded, self-damping overrides:** `outcome="sticky"` dominates post-recovery, while `outcome="load_override"` remains small or `0` and stops growing once the burst drains — even if a few bounded overrides spill onto the newly recreated cold pod, Flow Control caps concurrency so the cold pod warms cleanly without KV thrashing.
+
+8. **Clean up temporary payloads and exit `curl-debug`:**
+
+    ```bash
+    rm -f /tmp/prefix_a.txt /tmp/prefix_b.txt /tmp/warmup_*.json /tmp/req_*.json /tmp/codes_*.txt
+    exit
+    ```
+
+    *(If returning to the default guide profile afterward, re-run the [Deploy the Router](#1-deploy-the-router) command with `${ROUTER_VALUES}`.)*
+
+#### 3. Optional: Cache-Aware Cold-Miss Shedding with `prefix-cache-aware-admitter` (Experimental)
+
+Flow Control alone breaks the post-recovery cascade (keeping `load_override` bounded and self-damping), but during a severe outage cold misses (requests whose cached home pod crashed) still enter surviving pods, evicting warm KV blocks and building an EPP queue backlog.
+
+Once [llm-d-router#3465](https://github.com/llm-d/llm-d-router/pull/3465) (`prefix-cache-aware-admitter`, **Alpha**) is available in your router image, you can layer cache-aware load shedding directly on top of Flow Control:
+
+* **Enable the plugin:** Uncomment `router.epp.flags.allow-experimental-plugins: true` and the `prefix-cache-aware-admitter` plugin block (`shedThreshold: 0.85`, `minHitRatio: 0.60`) in [router/flow-control-cascade-protection.values.yaml](./router/flow-control-cascade-protection.values.yaml), then re-run `helm upgrade`.
+* **How it interacts with `objectives.yaml`:** `prefix-cache-aware-admitter` only evaluates **sheddable** traffic (`priority < 0`) once pool saturation reaches `shedThreshold` (`0.85`). With [objectives.yaml](./objectives.yaml):
+  * `premium-traffic` (`priority: 100`) and `standard-traffic` (`priority: 0`) are **never shed** by the admitter.
+  * `best-effort-traffic` (`priority: -10`) is admitted when at least one live pod holds `>= 60%` of its prompt in KV cache (`outcome="admitted_hot"`), and fast-failed with `HTTP 429` (`x-llm-d-request-dropped-reason: rejected-saturated`, `outcome="shed_cold"`) when cold — preventing cold prefills from thrashing surviving KV caches.
+* **Verify admitter decisions** by repeating **Wave 1 (Outage)** above with `-H "x-llm-d-inference-objective: best-effort-traffic"`: cold requests targeting the crashed pod's prefix increment `outcome="shed_cold"` (`HTTP 429`) once saturation crosses `0.85`, while warm requests targeting the surviving pod's prefix increment `outcome="admitted_hot"` (`HTTP 200`):
+
+  ```bash
+  TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+  curl -s -H "Authorization: Bearer ${TOKEN}" http://${GUIDE_NAME}-epp:9090/metrics \
+    | grep llm_d_epp_prefix_cache_aware_admitter_decisions_total
+  ```
+
 ## Production Tuning: Deriving `maxConcurrency`
 
 > [!IMPORTANT]
@@ -590,8 +795,12 @@ In this example we will demonstrate how to run [`inference-perf`](https://github
 >
 > For even more details about benchmarking, see the actual repository: [`llm-d-benchmark` on GitHub](https://github.com/llm-d/llm-d-benchmark).
 
+<!-- -->
+
 > [!WARNING]
 > Benchmarking flow-control's QoS differentiation and fairness behaviors requires a specialized multi-tenant load harness that does NOT yet ship in `llm-d-benchmark` or `inference-perf`. The command below exercises the stack under load and validates the end-to-end path, but it does NOT measure QoS slicing across priority classes or tenant isolation. A dedicated `guide_flow-control_1.yaml` will be added upstream once multi-tenant load shaping is supported.
+
+<!-- -->
 
 > [!TIP]
 > To run a simpler workload with fewer execution cycles first (useful for validating the path, image pulls, PVC binding, etc. before committing to a real run), pick a `sanity_*.yaml` profile (e.g. `sanity_random.yaml`) as described in [`docs/operations/validation/benchmark.md` → Available workload profiles](../../docs/operations/validation/benchmark.md#available-workload-profiles) and substitute it for the `--workload` flag in the command below.
