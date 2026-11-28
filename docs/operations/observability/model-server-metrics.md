@@ -38,7 +38,7 @@ When vLLM uses `NixlConnector` for disaggregated serving, it exports metrics for
 When vLLM uses the native `OffloadingConnector` (the [tiered prefix cache guide](../../../guides/tiered-prefix-cache/README.md)), it exports metrics for KV blocks moved between the GPU and the offload tiers. The names below are available in vLLM v0.26.0 and later.
 
 | Metric | What it measures | Why it matters |
-|--------|------------------|----------------|
+| -------- | ------------------ | ---------------- |
 | `vllm:external_prefix_cache_queries_total` | Prompt tokens looked up through the KV connector | Denominator for the offload tier hit rate |
 | `vllm:external_prefix_cache_hits_total` | Prompt tokens the connector reported as cached at scheduling time | Offload tier hits. Counted before the load finishes, so read it together with load bytes |
 | `vllm:kv_offload_store_bytes_total` | Bytes stored from GPU to the offload tier | Eviction traffic into the tier |
@@ -49,6 +49,28 @@ When vLLM uses the native `OffloadingConnector` (the [tiered prefix cache guide]
 
 > [!NOTE]
 > Older dashboards may use `vllm:kv_offload_total_bytes_total`, `vllm:kv_offload_total_time_total`, and `vllm:kv_offload_size` with a `transfer_type` label (`GPU_to_CPU`, `CPU_to_GPU`). vLLM still emits them for `CPUOffloadingSpec` and its subclasses, which covers both the CPU RAM and filesystem paths, but they are deprecated in favor of the series above.
+
+### vLLM Speculative Decoding Metrics
+
+When vLLM runs with a speculative decoding config, for example MTP in the [GLM-5.2 guide](../../../guides/models/glm-5-2/README.md), it exports the counters below, labelled `model_name` and `engine`. To work out why the counters are flat or missing, see [Diagnose Speculative Decoding](./speculative-decoding.md).
+
+The descriptions below were checked against vLLM at `85e199e` ([`spec_decode/metrics.py`](https://github.com/vllm-project/vllm/blob/85e199e60ca87a4b136aeaa0842541139b94c778/vllm/v1/spec_decode/metrics.py), [`core/sched/scheduler.py`](https://github.com/vllm-project/vllm/blob/85e199e60ca87a4b136aeaa0842541139b94c778/vllm/v1/core/sched/scheduler.py)). At that revision the counters are not registered without a speculative config, and the scheduler records them only when engine stats are enabled. Names, labels, and behavior can differ in other versions, so confirm them on the installed server's `/metrics`.
+
+| Metric | What it measures | Why it matters |
+| -------- | ------------------ | ---------------- |
+| `vllm:spec_decode_num_drafts_total` | Drafts counted in the engine's stats: one per request per step that scheduled at least one draft token | Shows that drafting was recorded. Not a count of requests or scheduler steps |
+| `vllm:spec_decode_num_draft_tokens_total` | Draft tokens counted in the engine's stats, as scheduled. Draft tokens invalidated by a structured-output grammar are not counted. With adaptive verification, draft tokens the target did not verify are counted | Denominator for acceptance. Divided by drafts, it gives the average proposal length to compare with the configured number of speculative tokens |
+| `vllm:spec_decode_num_accepted_tokens_total` | Draft tokens the target model accepted. The token the target model samples itself is not counted | Numerator for acceptance |
+| `vllm:spec_decode_num_accepted_tokens_per_pos_total` | Accepted draft tokens by draft `position` | Shows where acceptance drops off along the draft |
+
+Three counts are easy to mix up: draft tokens the drafter proposed, draft tokens the target verified, and draft tokens the target accepted. At the revision above, only the draft-token and accepted-token counters exist, and the draft-token counter is neither exactly the proposed nor the verified count.
+
+Adaptive verification (`enable_adaptive_verification`, Model Runner V2, `dspark` method at that revision) verifies only part of the drafted tokens. Open upstream proposals add a verified count with different names and semantics ([vllm-project/vllm#58340](https://github.com/vllm-project/vllm/pull/58340), [vllm-project/vllm#64099](https://github.com/vllm-project/vllm/issues/64099)); neither is merged, so confirm any verified-token series and its meaning on the installed server.
+
+Acceptance (accepted over draft tokens) and mean acceptance length (1 + accepted over drafts, as vLLM logs it) are separate quantities. Mean acceptance length includes the token the target samples itself, and it is not the number of tokens a client received.
+
+> [!NOTE]
+> Acceptance is a ratio of draft tokens, not a health check, an output-correctness check, or a measure of end-to-end speedup. A 0 acceptance while draft tokens increase is a real observation. An empty ratio is undefined: no draft tokens in the window, a missing series, too few samples, or mismatched labels can each produce it. If the counters stay flat, `--disable-log-stats` is one thing to check, based on the stats path at the revision above.
 
 ## SGLang
 
@@ -68,7 +90,7 @@ When vLLM uses the native `OffloadingConnector` (the [tiered prefix cache guide]
 When HiCache is enabled (the SGLang path in the [tiered prefix cache guide](../../../guides/tiered-prefix-cache/README.md)), SGLang exports metrics for the host (CPU) tier.
 
 | Metric | What it measures | Why it matters |
-|--------|------------------|----------------|
+| -------- | ------------------ | ---------------- |
 | `sglang:hicache_host_used_tokens` | Tokens currently held in the host KV cache | Divide by `sglang:hicache_host_total_tokens` for host tier occupancy |
 | `sglang:hicache_host_total_tokens` | Host KV cache capacity in tokens | Denominator for host tier occupancy |
 | `sglang:evicted_tokens_total` | Tokens evicted from GPU to host | Eviction traffic into the host tier |
