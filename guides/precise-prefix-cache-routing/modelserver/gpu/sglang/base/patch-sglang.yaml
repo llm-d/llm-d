@@ -22,13 +22,19 @@ spec:
             - "--enable-metrics"
             - "--kv-events-config"
             # unlike vLLM, do NOT add {"enable_kv_cache_events":true};
-            - '{"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-32B"}'
+            - '{"publisher":"zmq","endpoint":"$(KV_EVENTS_ENDPOINT)","replay_endpoint":"$(KV_EVENTS_REPLAY_ENDPOINT)","topic":"kv@$(POD_IP):$(POD_PORT)@Qwen/Qwen3-32B"}'
           ports:
             # Exposed so each router replica can dial the per-pod ZMQ socket
             # bound by SGLang (KV_EVENTS_ENDPOINT=tcp://*:5556). Only
             # attn_tp_rank==0 publishes, so each pod binds exactly one socket.
             - containerPort: 5556
               name: kv-events
+              protocol: TCP
+            # ROUTER socket of SGLang's replay buffer
+            # (KV_EVENTS_REPLAY_ENDPOINT=tcp://*:5559), dialed by the router's
+            # replay client (podDiscoveryConfig.replaySocketPort).
+            - containerPort: 5559
+              name: kv-replay
               protocol: TCP
           env:
             - name: HF_TOKEN
@@ -54,6 +60,8 @@ spec:
             # active-active HA across routers).
             - name: KV_EVENTS_ENDPOINT
               value: "tcp://*:5556"
+            - name: KV_EVENTS_REPLAY_ENDPOINT
+              value: "tcp://*:5559"
           resources:
             limits:
               cpu: '16'
