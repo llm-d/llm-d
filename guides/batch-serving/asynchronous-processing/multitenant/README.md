@@ -919,7 +919,10 @@ kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/objectives
 # Either model server overlay: the single-GPU one has the same object names
 kubectl delete -n ${NAMESPACE} -k ${MT}/modelserver/gpu/vllm/${INFRA_PROVIDER}
 kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/redis
-kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/monitoring --ignore-not-found
+# --ignore-not-found does not handle an unregistered monitoring API.
+if kubectl get --raw /apis/monitoring.coreos.com/v1 2>/dev/null | grep '"name":"podmonitors"' >/dev/null; then
+  kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/monitoring --ignore-not-found
+fi
 ```
 <!-- guide:cleanup[0] end -->
 
@@ -930,7 +933,10 @@ kubectl delete -n ${NAMESPACE} -k ${MT}/manifests/monitoring --ignore-not-found
 <!-- llm-d-cicd:skip start -->
 ```bash
 # only when QUEUE_BACKEND=pubsub:
-kubectl delete -n ${NAMESPACE} -f ${MT}/manifests/gmp-frontend.yaml -f ${MT}/manifests/gmp-podmonitoring.yaml
+kubectl delete -n ${NAMESPACE} -f ${MT}/manifests/gmp-frontend.yaml --ignore-not-found
+if kubectl get --raw /apis/monitoring.googleapis.com/v1 2>/dev/null | grep '"name":"podmonitorings"' >/dev/null; then
+  kubectl delete -n ${NAMESPACE} -f ${MT}/manifests/gmp-podmonitoring.yaml --ignore-not-found
+fi
 gcloud monitoring dashboards list --project ${PROJECT_ID} --filter='displayName:"Async Processor"' \
   --format='value(name)' | xargs -r -n1 gcloud monitoring dashboards delete --project ${PROJECT_ID} --quiet
 PROJECT_ID=${PROJECT_ID} DELETE_SA=1 ${MT}/scripts/gcp-teardown.sh
