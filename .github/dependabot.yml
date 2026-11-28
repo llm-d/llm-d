@@ -1,4 +1,6 @@
 version: 2
+# `labels: []` is deliberate: without the key, Dependabot creates and applies
+# its default `dependencies` and ecosystem labels.
 updates:
 
   # GitHub Actions dependencies
@@ -6,9 +8,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    labels:
-      - "dependencies"
-      - "release-note-none"
+    labels: []
     commit-message:
       prefix: "deps(actions)"
 
@@ -17,7 +17,6 @@ updates:
     directory: "/docker"
     schedule:
       interval: "weekly"
-    labels:
-      - "dependencies"
+    labels: []
     commit-message:
       prefix: "deps(docker)"

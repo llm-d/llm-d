@@ -1,0 +1,9 @@
+# ONBOARDING.md access requests are filed as blank issues.
+blank_issues_enabled: true
+contact_links:
+  - name: Questions & Community Support
+    url: https://llm-d.ai/slack
+    about: Ask usage questions or discuss ideas with maintainers and SIGs on Slack.
+  - name: Report a Security Vulnerability
+    url: https://github.com/llm-d/llm-d/security/advisories/new
+    about: Report security vulnerabilities privately via GitHub Security Advisories (see SECURITY.md).

@@ -564,7 +564,7 @@ class LabelerTaxonomyTests(unittest.TestCase):
             "ISSUE_BODY",
             "ISSUE_NUMBER",
             fr_body,
-            current_labels=["enhancement", "triage"],
+            current_labels=["enhancement"],
         )
         self.assertEqual(added, ["area/docs", "area/flowcontrol", "area/router"])
 
@@ -582,7 +582,7 @@ class LabelerTaxonomyTests(unittest.TestCase):
             "ISSUE_BODY",
             "ISSUE_NUMBER",
             bug_body,
-            current_labels=["bug", "triage"],
+            current_labels=["bug"],
         )
         self.assertEqual(bug_added, ["area/batch"])
 
@@ -592,7 +592,7 @@ class LabelerTaxonomyTests(unittest.TestCase):
             "ISSUE_BODY",
             "ISSUE_NUMBER",
             empty_bug_body,
-            current_labels=["bug", "triage"],
+            current_labels=["bug"],
         )
         self.assertEqual(empty_added, [])
 
