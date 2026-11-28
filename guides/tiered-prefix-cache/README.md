@@ -41,6 +41,7 @@ This guide includes configurations for the following accelerator and model serve
 | Google TPU v5p | `tpu/v5p` | `Qwen/Qwen3-32B` | ✅ validated | ✅ validated | GKE only · vLLM: 3 replicas × 4 chips (`2x2x1`, TP=4) · SGLang: 2 replicas × 4 chips (`2x2x1`, TP=4) · Torch TPU SGLang (`tpu-sglang` image, fp8 KV, 16k context, HiCache host tier 32 GB × 4 ranks) · `CONNECTOR=native`, `VARIANT=cpu` · nightlies run on Spot capacity |
 | Google TPU v6e | `tpu/v6` | `Qwen/Qwen3-32B` | 🟡 community | — | GKE only · 3 replicas × 8 chips (`2x4`, TP=8) · Torch TPU vLLM (`torch-tpu-vllm` image, 32k context) · `CONNECTOR=native`, `VARIANT=cpu` · validated manually 2026-10-12; nightly runs on `tpu/v5p` while v6e capacity is unavailable |
 | Google TPU v7 | `tpu/v7` | `Qwen/Qwen3.5-397B-A17B-FP8` | 🟡 community | 🟡 community | GKE only · vLLM: 3 replicas × 4 chips (`2x2x1`, DP=8 × TP=1, EP, fp8 KV, 262k context) or multi-host LeaderWorkerSet (`2x2x2`, TP=16, EP, `HOST_TYPE=multi-host`) · Torch TPU vLLM (`torch-tpu-vllm` image, fp8 KV, 262k context, 32 GiB host tier per DP engine / 256 GiB per multi-host group) · `CONNECTOR=native`, `VARIANT=cpu` or `fs` (TPU Sync storage tier on the shared PVC, validated with Managed Lustre; single-host only) · SGLang: serves `Qwen/Qwen3-32B`, 2 replicas × 4 chips (`2x2x1`, TP=8) · Torch TPU SGLang (`tpu-sglang` image, fp8 KV, 16k context, HiCache host tier 32 GB × 8 ranks) · `CONNECTOR=native`, `VARIANT=cpu` |
+| Rebellions NPU | `npu` | `MiniMaxAI/MiniMax-M2.7` | 🟡 community | — | RBLN-CR series · 1 replica × 4 NPUs via DRA (one server per data-parallel rank, expert parallel) · `CONNECTOR=lmcache-connector`, `VARIANT=cpu` |
 
 ✅ validated: covered by a nightly E2E workflow · 🟡 community: maintained by the hardware vendor or community, not covered by nightly E2E · ❌ not supported: tracked in the linked issue · — no configuration.
 <!-- guide:support end -->
@@ -81,7 +82,7 @@ export GUIDE_NAME=tiered-prefix-cache
 export NAMESPACE=llm-d-tiered-prefix-cache
 export MONITORING=false # options: false, true
 export MONITORING_VALUES=
-export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v5p, tpu/v6, tpu/v7
+export ACCELERATOR_TYPE=gpu # options: gpu, amd, xpu, tpu/v5p, tpu/v6, tpu/v7, npu
 export MODEL_SERVER=vllm # options: vllm, sglang
 export CONNECTOR=native # options: native, lmcache-connector, mooncake-store; offloading implementation (table above)
 export VARIANT=cpu # options: cpu, fs; offload tier: cpu = CPU RAM, fs = CPU RAM + shared filesystem (fs: single-host only)
@@ -154,6 +155,7 @@ export ROUTER_VALUES="${REPO_ROOT}/guides/${GUIDE_NAME}/router/${HOST_TYPE}/${GU
 > | TPU v5p SGLang `native` (HiCache; fp8 KV) | 32 GB × 4 ranks | 15250 |
 > | TPU v7 SGLang `native` (HiCache; fp8 KV) | 32 GB × 8 ranks | 15250 |
 > | Intel XPU vLLM `lmcache-connector` (Qwen3-8B, 144 KiB per token) | 20 GiB | 2275 |
+> | Rebellions NPU vLLM `lmcache-connector` (MiniMax-M2.7, 124 KiB per token, 512-token router blocks, one endpoint per rank) | 50 GiB × 4 ranks | 825 per rank |
 >
 > For SGLang HiCache every TP rank holds the same tokens, so the capacity is the per-rank host pool the engine logs at startup (`Allocating kv hierarchical KV host pool: <tokens> tokens`) divided by 64. On TPU the `page_first_fused` host layout stores 32 KiB per token per rank for Qwen3-32B (976,576 tokens per 32 GB rank), twice the fp8 device footprint, which is why the TPU rows hold fewer blocks than the tier bytes suggest.
 >
@@ -193,6 +195,16 @@ export MONITORING_VALUES="-f ${REPO_ROOT}/guides/recipes/router/features/monitor
 </details>
 <!-- tabs:end -->
 
+**(Rebellions NPU only) Layer the NPU router values**, which list the four data-parallel rank ports and match prefixes in both tiers at the runtime's 512-token sub-block:
+
+<!-- guide:deploy.accelerator_values[0] start -->
+<!-- llm-d-cicd:skip start -->
+```bash
+export ACCELERATOR_VALUES="-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/single-host/npu.rbln.values.yaml"
+```
+<!-- llm-d-cicd:skip end -->
+<!-- guide:deploy.accelerator_values[0] end -->
+
 **Deploy the router** in [Standalone Mode](../../docs/architecture/router/proxy.md), with an Envoy sidecar in front of the router. The release name `${GUIDE_NAME}` is mandatory: the `InferencePool` selector matches a guide label that pairs with this release. To front the router with a Kubernetes Gateway instead, see Gateway Mode in the [Optimized Baseline](../optimized-baseline/README.md#1-deploy-the-llm-d-router).
 
 <!-- guide:deploy.standalone start -->
@@ -202,6 +214,7 @@ helm install ${GUIDE_NAME} \
   -f ${ROUTER_BASE_VALUES} \
   ${MONITORING_VALUES} \
   -f ${ROUTER_VALUES} \
+  ${ACCELERATOR_VALUES:-} \
   -n ${NAMESPACE} --version ${ROUTER_CHART_VERSION}
 ```
 <!-- guide:deploy.standalone end -->

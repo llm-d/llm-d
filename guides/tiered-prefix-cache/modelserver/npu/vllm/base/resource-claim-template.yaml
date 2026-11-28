@@ -1,0 +1,15 @@
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: npu-claim-template-decode
+spec:
+  spec:
+    devices:
+      requests:
+        - name: npu
+          exactly:
+            deviceClassName: npu.rebellions.ai
+            count: 4
+            selectors:
+              - cel:
+                  expression: device.attributes["npu.rebellions.ai"].productName.startsWith("RBLN-CR")
