@@ -22,6 +22,11 @@ router:
             prefixMatchInfoProducerName: gpu-prefix-cache-producer
         - type: approx-prefix-cache-producer
           name: gpu-prefix-cache-producer
+          parameters:
+            # Keep this index at the HBM tier. Without it, a model server that
+            # reports its host tier (SGLang HiCache, vLLM after v0.32.0) sizes
+            # this index to the host tier too, the same as the CPU index below.
+            capacityTiers: [hbm]
         - type: approx-prefix-cache-producer
           name: cpu-prefix-cache-producer
           parameters:
