@@ -1,0 +1,13 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: xpu-vllm-lmcache
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: lmcache
+      app.kubernetes.io/instance: tiered-prefix-cache-xpu
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
