@@ -60,7 +60,8 @@ decode                  5m
 <details>
 <summary><b>GKE (Managed Prometheus)</b></summary>
 
-When [GKE automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) is enabled (`--auto-monitoring-scope=ALL`; see [GKE Monitoring & Telemetry](../../infrastructure/providers/gke/README.md#monitoring--telemetry)), GKE automatically detects **vLLM** and **SGLang** model server workloads and provisions `PodMonitoring` (`monitoring.googleapis.com/v1`) resources labeled `source: gke-auto-monitoring` in your workload namespace. You do **not** need to manually create `PodMonitor` resources or apply the Kustomize monitoring component for vLLM or SGLang.
+When [GKE automatic application monitoring](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/configure-automatic-application-monitoring) is enabled (`--auto-monitoring-scope=ALL`; see [GKE Monitoring & Telemetry](../../infrastructure/providers/gke/README.md#monitoring--telemetry)), GKE automatically detects **vLLM** and **SGLang** model server workloads and provisions `PodMonitoring` (`monitoring.googleapis.com/v1`) resources labeled `source: gke-auto-monitoring` in your workload namespace.
+You do **not** need to manually create `PodMonitor` resources or apply the Kustomize monitoring component for vLLM or SGLang.
 
 Verify the auto-generated `PodMonitoring` resource in your namespace:
 
@@ -124,7 +125,8 @@ epp-servicemonitor      5m
 <details>
 <summary><b>GKE (Managed Prometheus)</b></summary>
 
-GKE automatic application monitoring creates `PodMonitoring` resources for model servers (`vLLM` and `SGLang`), not for the EPP deployment (`*-epp`). Layer [`guides/recipes/router/features/monitoring-gke.values.yaml`](../../../guides/recipes/router/features/monitoring-gke.values.yaml) when installing or upgrading the router Helm chart (add `--set router.monitoring.provider.gmp.autopilot=true` on GKE Autopilot) so the chart creates an authenticated `PodMonitoring` (`monitoring.googleapis.com/v1`) for the EPP (`:9090/metrics`), along with the metrics-reader `ServiceAccount`, token `Secret`, and RBAC bindings for `gmp-system`.
+GKE automatic application monitoring creates `PodMonitoring` resources for model servers (`vLLM` and `SGLang`), not for the EPP deployment (`*-epp`).
+Layer [`guides/recipes/router/features/monitoring-gke.values.yaml`](../../../guides/recipes/router/features/monitoring-gke.values.yaml) when installing or upgrading the router Helm chart (add `--set router.monitoring.provider.gmp.autopilot=true` on GKE Autopilot) so the chart creates an authenticated `PodMonitoring` (`monitoring.googleapis.com/v1`) for the EPP (`:9090/metrics`), along with the metrics-reader `ServiceAccount`, token `Secret`, and RBAC bindings for `gmp-system`.
 
 Verify the EPP `PodMonitoring` resource exists:
 
@@ -142,7 +144,173 @@ optimized-baseline   1m
 </details>
 <!-- tabs:end -->
 
-## Step 3: Query Metrics in Prometheus
+## Step 3: Scrape Coordinator Metrics
+
+The coordinator serves `llm_d_coordinator_*` metrics on its own listener, separate from the serving port (`server.listen_addr`, default `:8080`). The metrics listener is configured by `server.metrics_port` in the coordinator config file: it defaults to `9090`, serves `/metrics` over plain HTTP unless `server.metrics_cert_dir` enables TLS on it, and is disabled when `server.metrics_port` is non-positive.
+
+The `PodMonitor` and `PodMonitoring` examples below select the coordinator pods by label and scrape the named container port `metrics`. The [coordinator disaggregation](../../../guides/coord-disaggregation/README.md) and [multitenant](../../../guides/batch-serving/asynchronous-processing/multitenant/README.md) guides already declare that port and ship both resources,
+so apply the guide's own monitoring resources instead of the examples here: `coordinator/monitoring` for coord-disaggregation and `manifests/monitoring` for multitenant. On GKE, apply `coordinator/monitoring/gmp-podmonitoring.yaml` for coord-disaggregation and `manifests/gmp-podmonitoring.yaml` for multitenant. If your own coordinator Deployment only declares the serving port, add the metrics port first:
+
+```yaml
+ports:
+  - name: metrics
+    containerPort: 9090
+    protocol: TCP
+```
+
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
+
+Create a `PodMonitor` (`monitoring.coreos.com/v1`) for the coordinator:
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: llm-d-coordinator
+  namespace: ${NAMESPACE}
+  labels:
+    app: llm-d-coordinator
+spec:
+  selector:
+    matchLabels:
+      app: llm-d-coordinator
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+```
+
+Apply it and verify the resource exists:
+
+```bash
+kubectl apply -n ${NAMESPACE} -f coordinator-podmonitor.yaml
+kubectl get podmonitors -n ${NAMESPACE}
+```
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+GKE automatic application monitoring does not create a `PodMonitoring` for the coordinator. Create one (`monitoring.googleapis.com/v1`) so Managed Service for Prometheus collects the coordinator metrics:
+
+```yaml
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: llm-d-coordinator
+  namespace: ${NAMESPACE}
+  labels:
+    app: llm-d-coordinator
+spec:
+  selector:
+    matchLabels:
+      app: llm-d-coordinator
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+```
+
+Apply it and verify the resource exists:
+
+```bash
+kubectl apply -n ${NAMESPACE} -f coordinator-podmonitoring.yaml
+kubectl get podmonitoring -n ${NAMESPACE}
+```
+
+</details>
+<!-- tabs:end -->
+
+Confirm the target is `UP` in Prometheus, then send a request and query `llm_d_coordinator_request_total` to check that series are arriving. The request counters only appear after the coordinator handles traffic. See [Coordinator Metrics](./router-metrics.md#coordinator-metrics) for the available metric names.
+
+## Step 4: Scrape Disaggregation Sidecar Metrics
+
+The disaggregation sidecar exports `llm_d_disagg_sidecar_*` and `moriio_dns_*` metrics at `/metrics`, but its metrics listener is **disabled by default**. Enable it with `--metrics-port` on the `routing-proxy` container. Use port `9095` and the port name `sc-metrics`, the values the Wide-EP AMD overlay uses:
+
+```yaml
+- name: routing-proxy
+  args:
+    - --port=8000
+    - --metrics-port=9095
+  ports:
+    - name: sc-metrics
+      containerPort: 9095
+      protocol: TCP
+```
+
+`--metrics-port` is independent of the proxy serving port (`--port`) and of `--secure-serving`; `0` disables the endpoint. The metrics listener serves plain HTTP unless `--metrics-cert-dir` is set.
+
+> [!NOTE]
+> The Wide-EP AMD overlay enables the listener at `--metrics-port=9095` with the port name `sc-metrics` in [`guides/wide-ep/modelserver/amd/vllm/base/disaggregatedset.yaml`](../../../guides/wide-ep/modelserver/amd/vllm/base/disaggregatedset.yaml). Keep those values so the scrape resources below match that overlay's pods. The other P/D guides do not set `--metrics-port` yet, so add the flag and a matching named port before creating the scrape resource below.
+
+The sidecar runs next to the model server in the same pod, so select the pod by its shared label and scrape only the named sidecar metrics port:
+
+<!-- tabs:start group=monitoring -->
+<details open>
+<summary><b>OSS Prometheus / OpenShift</b></summary>
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: llm-d-disagg-sidecar
+  namespace: ${NAMESPACE}
+  labels:
+    app: llm-d-disagg-sidecar
+spec:
+  selector:
+    matchLabels:
+      llm-d.ai/inference-serving: "true"
+  podMetricsEndpoints:
+    - port: sc-metrics
+      path: /metrics
+      interval: 30s
+```
+
+Apply it and verify the resource exists:
+
+```bash
+kubectl apply -n ${NAMESPACE} -f sidecar-podmonitor.yaml
+kubectl get podmonitors -n ${NAMESPACE}
+```
+
+</details>
+<details>
+<summary><b>GKE (Managed Prometheus)</b></summary>
+
+```yaml
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: llm-d-disagg-sidecar
+  namespace: ${NAMESPACE}
+  labels:
+    app: llm-d-disagg-sidecar
+spec:
+  selector:
+    matchLabels:
+      llm-d.ai/inference-serving: "true"
+  endpoints:
+    - port: sc-metrics
+      path: /metrics
+      interval: 30s
+```
+
+Apply it and verify the resource exists:
+
+```bash
+kubectl apply -n ${NAMESPACE} -f sidecar-podmonitoring.yaml
+kubectl get podmonitoring -n ${NAMESPACE}
+```
+
+</details>
+<!-- tabs:end -->
+
+The `llm_d_disagg_sidecar_requests_total` counter only appears after the sidecar handles traffic; after a request, query it to confirm series are arriving. See [Disaggregation Sidecar Metrics](./router-metrics.md#disaggregation-sidecar--mori-io-dns) for the available metric names.
+
+## Step 5: Query Metrics in Prometheus
 
 <!-- tabs:start group=monitoring -->
 <details open>
@@ -172,6 +340,8 @@ Open [Metrics Explorer](https://console.cloud.google.com/monitoring/metrics-expl
 | ---- | ------ |
 | [Model Server Metrics](./model-server-metrics.md) | vLLM (including NIXL KV transfer and KV offloading) and SGLang (including HiCache) |
 | [Router (EPP) Metrics](./router-metrics.md) | Requests and latency, inference pool, scheduler and plugins, flow control, prefix and multimodal cache, predicted latency |
+| [Coordinator Metrics](./router-metrics.md#coordinator-metrics) | Requests, errors and latency, per-step timings, and upstream calls |
+| [Disaggregation Sidecar Metrics](./router-metrics.md#disaggregation-sidecar--mori-io-dns) | Requests, disaggregation stage durations and errors, and MoRI-IO DNS resolution |
 | [Batch Gateway Metrics](./batch-gateway-metrics.md) | Batch Gateway API server, processor, and GC reconciler |
 | [Track Inference Cost](./inference-cost.md) | Per-model hourly cost and cost per million tokens via OpenCost |
 
@@ -185,7 +355,7 @@ For ready-to-run queries, see the [PromQL Query Reference](./promql.md).
    - **OSS Prometheus / OpenShift:** `kubectl get podmonitors,servicemonitors -n ${NAMESPACE}`
    - **GKE (Managed Prometheus):** `kubectl get podmonitoring -n ${NAMESPACE}`
 
-2. Verify the collector is scraping the targets. On the OSS Prometheus UI (`http://localhost:9090/targets`), check that model server and EPP targets show `UP`. On GKE, verify that the `PodMonitoring` status reports `ConfigurationCreateSuccess=True`.
+2. Verify the collector is scraping the targets. On the OSS Prometheus UI (`http://localhost:9090/targets`), check that model server, EPP, and coordinator targets show `UP`. On GKE, verify that the `PodMonitoring` status reports `ConfigurationCreateSuccess=True`.
 
 3. Confirm pods expose metrics:
 

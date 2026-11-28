@@ -114,7 +114,7 @@ When a profile runs, it first filters the candidate endpoints. If any remain, it
 * **[`disagg-profile-handler`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/profilehandler/disagg)**: Runs two scheduling profiles, one for prefill and one for decode. The **decode endpoint** is set as the primary destination for the proxy to forward the original request, while the **prefill endpoint** is injected into the request as a specialized header.
 
 > [!NOTE]
-> An older handler, `data-parallel-profile-handler`, is **deprecated** and kept only for backward compatibility, use `single-profile-handler` instead.
+> `data-parallel-profile-handler` was removed in llm-d Router v1.0.0. Configurations that still reference it fail at startup; use `single-profile-handler` instead.
 
 ---
 
@@ -168,7 +168,7 @@ The following metrics provide visibility into the InferencePool health and sched
 #### Pool Health Metrics
 
 | Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
+| -------- | ------ | -------- | ------------- |
 | `llm_d_epp_ready_endpoints` | Gauge | `name` | Number of ready endpoints in the pool |
 | `llm_d_epp_average_kv_cache_utilization` | Gauge | `name` | Average KV cache utilization across the pool |
 | `llm_d_epp_average_queue_size` | Gauge | `name` | Average number of pending requests across the pool |
@@ -181,7 +181,7 @@ The following metrics provide visibility into the InferencePool health and sched
 #### Scheduler Performance Metrics
 
 | Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
+| -------- | ------ | -------- | ------------- |
 | `llm_d_epp_scheduler_attempts_total` | Counter | `status`, `target_model_name`, `endpoint_name`, `namespace`, `port` | Number of scheduling attempts and their outcomes |
 | `llm_d_epp_scheduler_e2e_duration_seconds` | Histogram | *None* | End-to-end scheduling latency |
 | `llm_d_epp_plugin_duration_seconds` | Histogram | `extension_point`, `plugin_type`, `plugin_name` | Processing latency for each plugin |
@@ -190,14 +190,14 @@ The following metrics provide visibility into the InferencePool health and sched
 #### In-Flight Load Metrics
 
 | Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
+| -------- | ------ | -------- | ------------- |
 | `llm_d_epp_inflight_requests` | Gauge | `endpoint_name`, `namespace`, `producer_name`, `fairness_id`, `priority` | Requests currently in flight on each endpoint |
 | `llm_d_epp_inflight_tokens` | Gauge | `endpoint_name`, `namespace`, `producer_name`, `fairness_id`, `priority` | Tokens currently in flight on each endpoint |
 
 #### Disaggregation Metrics
 
 | Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
+| -------- | ------ | -------- | ------------- |
 | `llm_d_epp_disagg_decision_total` | Counter | `plugin_name`, `plugin_type`, `model_name`, `decision_type` | Disaggregation routing decisions (`decode-only`, `prefill-decode`, `encode-decode`, `encode-prefill-decode`) |
 | `llm_d_epp_disaggregatedset_strict_revision_no_match_total` | Counter | `plugin_type`, `plugin_name` | Strict revision selections that matched no endpoint and failed closed |
 | `llm_d_epp_disaggregatedset_revision_gating_share` | Gauge | `plugin_type`, `plugin_name`, `mode`, `revision` | Current weighted revision gating share |
@@ -205,7 +205,7 @@ The following metrics provide visibility into the InferencePool health and sched
 #### Prefix Cache Metrics (Approximate)
 
 | Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
+| -------- | ------ | -------- | ------------- |
 | `llm_d_epp_prefix_indexer_size` | Gauge | `plugin_name`, `plugin_type` | Size of the approximate prefix indexer |
 | `llm_d_epp_prefix_indexer_hit_ratio` | Histogram | `plugin_name`, `plugin_type` | Hit ratio for prefix matches |
 | `llm_d_epp_prefix_indexer_hit_bytes` | Histogram | `plugin_name`, `plugin_type` | Bytes matched in prefix cache lookup |
@@ -213,14 +213,14 @@ The following metrics provide visibility into the InferencePool health and sched
 #### Data Layer Errors
 
 | Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
+| -------- | ------ | -------- | ------------- |
 | `llm_d_epp_datalayer_poll_errors_total` | Counter | `source_type` | Data-source poll failures |
 | `llm_d_epp_datalayer_extract_errors_total` | Counter | `source_type`, `extractor_type` | Extractor failures |
 
 #### Multimodal Encoder Cache
 
 | Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
+| -------- | ------ | -------- | ------------- |
 | `llm_d_epp_encoder_cache_queries_total` | Counter | `plugin_type`, `plugin_name`, `modality` | Encoder-cache lookups |
 | `llm_d_epp_encoder_cache_hits_total` | Counter | `plugin_type`, `plugin_name`, `pod`, `modality` | Encoder-cache hits |
 | `llm_d_epp_encoder_cache_hit_ratio` | Histogram | `plugin_type`, `plugin_name` | Hit ratio for encoder cache lookups |
@@ -228,5 +228,5 @@ The following metrics provide visibility into the InferencePool health and sched
 #### System Info
 
 | Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
+| -------- | ------ | -------- | ------------- |
 | `llm_d_epp_info` | Gauge | `commit`, `build_ref` | EPP build information |
