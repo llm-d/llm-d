@@ -1,0 +1,32 @@
+apiVersion: llm-d.ai/v1
+kind: EndpointPickerConfig
+
+# Use a hardware-independent load scorer. Prefix-affinity throughput tuning
+# for other models/hardware is outside this connectivity recipe.
+plugins:
+  - name: file-discovery
+    type: file-discovery
+    parameters:
+      path: /etc/epp/endpoints.yaml
+      watchFile: true
+  - type: inflight-load-producer
+  - type: token-load-scorer
+  - name: metrics-source
+    type: metrics-data-source
+  - name: metrics-extractor
+    type: core-metrics-extractor
+
+schedulingProfiles:
+  - name: default
+    plugins:
+      - pluginRef: token-load-scorer
+
+dataLayer:
+  injectDefaults: false
+  discovery:
+    endpoints:
+      pluginRef: file-discovery
+  sources:
+    - pluginRef: metrics-source
+      extractors:
+        - pluginRef: metrics-extractor
