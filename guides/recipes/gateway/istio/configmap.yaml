@@ -8,6 +8,8 @@ metadata:
 data:
   deployment: |
     spec:
+      # Keep a fixed replica count when the HPA overlay is not used.
+      replicas: 1
       template:
         spec:
           containers:

@@ -70,6 +70,32 @@ llm-d-inference-gateway   istio   10.xx.xx.xx     True         30s
 
 Wait until `PROGRAMMED` shows `True` before proceeding.
 
+### Gateway replicas, resources, and autoscaling
+
+Istio automatically creates the gateway `Deployment` and `Service` from the
+`Gateway`. For this recipe, the generated Deployment is named
+`llm-d-inference-gateway-istio`.
+
+The recipe's `ConfigMap` uses `Gateway.spec.infrastructure.parametersRef` to
+customize the generated Deployment. The fixed-size recipe sets one replica and
+keeps the existing `istio-proxy` resource requests and limits in
+`guides/recipes/gateway/istio/configmap.yaml`. Copy the recipe into a local
+overlay and change `data.deployment.spec.replicas` or the container
+`resources` when a different fixed-size configuration is required.
+
+To enable CPU-based HPA, apply the opt-in overlay instead of the base recipe:
+
+```bash
+kubectl apply -k "https://github.com/llm-d/llm-d/guides/recipes/gateway/istio-hpa?ref=${LLM_D_VERSION}" -n ${NAMESPACE}
+```
+
+The overlay creates an HPA through Istio's
+`ConfigMap.data.horizontalPodAutoscaler` customization, with a minimum of one
+replica and a maximum of five. It requires a working Kubernetes Metrics API.
+The HPA customization is supported by Istio 1.26 and later; this guide installs
+Istio 1.29.2. Adjust the HPA limits and metrics in a local overlay for your
+workload.
+
 ## Step 4: Send a Request
 
 > [!IMPORTANT]
