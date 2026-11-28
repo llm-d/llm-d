@@ -1,7 +1,7 @@
 *.swp
 *.history
 .DS_Store
-CLAUDE.md
+CLAUDE.local.md
 .release-team
 .generated-* # generated files, e.g., from codegen tools
 
