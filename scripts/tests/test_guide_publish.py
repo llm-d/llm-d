@@ -452,6 +452,28 @@ def test_set_branch_cli_rerenders(tmp_path):
     assert "export BRANCH=release-1.0" in (gdir / "README.md").read_text()
 
 
+def _clone_runs(node):
+    """Every ``run:`` under ``prerequisites.clone`` that checks a branch out."""
+    if node is None:
+        return []
+    return [s["run"] for s in guide._flatten_steps(node) if "git checkout" in str(s.get("run", ""))]
+
+
+@pytest.mark.parametrize(
+    "path",
+    sorted(p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / "guides").rglob("guide.yaml")),
+)
+def test_set_branch_pins_every_clone_checkout(path):
+    # A clone that reads BRANCH before the env.static exports run (the README
+    # clones first, then sets the env) must define it inline, or a release cut
+    # still checks out the fallback branch.
+    pinned = yaml.safe_load(guide.set_branch_text((REPO_ROOT / path).read_text(), "release-9.9"))
+    for run in _clone_runs((pinned.get("prerequisites") or {}).get("clone")):
+        assert "${BRANCH:-" not in run, run
+        if "${BRANCH}" in run:
+            assert "export BRANCH=release-9.9" in run, run
+
+
 def test_set_branch_preserves_trailing_comments():
     text = (
         "env:\n"
