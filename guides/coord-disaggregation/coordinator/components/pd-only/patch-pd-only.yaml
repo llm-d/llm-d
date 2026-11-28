@@ -1,16 +1,15 @@
 # PD-only pipeline: drops replace-media-urls, render, and encode -- see the
-# PD-only note in ../../README.md's Installation Instructions for why (no encode
+# PD-only note in ../../../README.md's Installation Instructions for why (no encode
 # role means no multimedia handling; the render step normalizes multimodal
 # input for the encode/prefill phases, so it goes too). ec_connector is dropped
 # too -- encoder-cache transfer only matters with an encode role in the pipeline.
 #
-# Unlike multimedia-downloader/patch-coordinator-ca.yaml, this file still has a
-# ${GATEWAY_ADDRESS} placeholder (the gateway.address line below is copied whole
-# from configmap.yaml), so it needs envsubst -- --patch-file reads the file raw
-# and won't expand it. Apply after the normal coordinator deploy:
-#   kubectl patch configmap llm-d-coordinator-config -n ${NAMESPACE} --type=strategic \
-#       --patch="$(envsubst < coordinator/base/patch-pd-only.yaml)"
-#   kubectl rollout restart deployment/llm-d-coordinator -n ${NAMESPACE}
+# A strategic-merge patch on the Coordinator's ConfigMap that replaces the whole
+# coordinator.yaml, so every other field is a copy of ../../base/configmap.yaml
+# (comments aside); scripts/tests/test_coord_disaggregation_pd_only.py keeps the
+# two equal. The pd-only and pd-only-gke overlays apply it through this
+# component. ${GATEWAY_ADDRESS} is left as is, for the README command's
+# `| envsubst` after the build, as in base.
 apiVersion: v1
 kind: ConfigMap
 metadata:

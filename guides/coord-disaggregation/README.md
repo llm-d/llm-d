@@ -14,7 +14,7 @@ Sidecar](../../docs/architecture/disaggregation/pd-disaggregation.md) that today
 prefill→decode sequence, the Coordinator is a single service that drives a
 **configurable pipeline** over each request:
 
-```
+```text
 replace-media-urls → render → conditional-decode → encode → prefill → decode
 ```
 
@@ -99,12 +99,12 @@ the extra per-phase hop shows up only in time to first token, as a single-digit
 millisecond gap, and never in time per output token or end-to-end request latency.
 Under concurrent load it disappears entirely:
 
-| Setting | TTFT (Coordinator vs. sidecar) | E2E latency / ITL |
-|---|---|---|
-| Single request, text (`gpt-oss-120b`, 1–1,000 input or 100–2,500 output tokens) | median 1.6–4.9% higher | within ±1.5% / ±0.7% |
-| Concurrent spikes, text (`DeepSeek-V2`, 50–500 concurrent) | 10–12% *lower* at ≤100 concurrent, tied above | tied, no consistent edge |
-| Prefill-bound multimodal (`Qwen3-VL-235B`, 1P/3D) | 4–8% higher | tied |
-| Decode-contended multimodal, closed loop (`Qwen3-VL-235B`, 2P/2D, 50–300 concurrent) | p99 within 1–4% | within ~2% |
+| Setting                                                                              | TTFT (Coordinator vs. sidecar)                | E2E latency / ITL        |
+| ------------------------------------------------------------------------------------ | --------------------------------------------- | ------------------------ |
+| Single request, text (`gpt-oss-120b`, 1–1,000 input or 100–2,500 output tokens)      | median 1.6–4.9% higher                        | within ±1.5% / ±0.7%     |
+| Concurrent spikes, text (`DeepSeek-V2`, 50–500 concurrent)                           | 10–12% *lower* at ≤100 concurrent, tied above | tied, no consistent edge |
+| Prefill-bound multimodal (`Qwen3-VL-235B`, 1P/3D)                                    | 4–8% higher                                   | tied                     |
+| Decode-contended multimodal, closed loop (`Qwen3-VL-235B`, 2P/2D, 50–300 concurrent) | p99 within 1–4%                               | within ~2%               |
 
 **The benefit is real but conditional.** With heavy-tailed multimodal requests
 released in bursts against KV-saturated decode pods, the Coordinator delivers 4–10%
@@ -145,20 +145,20 @@ architectures tie.
 
 ## Default Configuration
 
-| Parameter          | Value                                                              |
-| ------------------ | ------------------------------------------------------------------ |
-| Model              | [Qwen/Qwen3-VL-32B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-32B-Instruct) |
-| Roles              | encode, prefill, decode (one `DisaggregatedSet`, `slices: 1`)      |
+| Parameter          | Value                                                                             |
+| ------------------ | --------------------------------------------------------------------------------- |
+| Model              | [Qwen/Qwen3-VL-32B-Instruct](https://huggingface.co/Qwen/Qwen3-VL-32B-Instruct)   |
+| Roles              | encode, prefill, decode (one `DisaggregatedSet`, `slices: 1`)                     |
 | Replicas per role  | encode: 2, prefill: 4, decode: 4, per slice (encode: 0 in the PD-only deployment) |
-| Tensor Parallelism | 2                                                                   |
-| GPUs per replica   | 2                                                                   |
-| Total GPUs         | 20                                                                  |
+| Tensor Parallelism | 2                                                                                 |
+| GPUs per replica   | 2                                                                                 |
+| Total GPUs         | 20                                                                                |
 
 ### Supported Hardware Backends
 
-| Backend           | Directory                | Notes                                            |
-| ------------------ | ------------------------- | ------------------------------------------------- |
-| NVIDIA GPU (vLLM) | `modelserver/gpu/vllm/`  | Default configuration (`base`, `coreweave`, and `gke` providers) |
+| Backend           | Directory               | Notes                                                            |
+| ----------------- | ----------------------- | ---------------------------------------------------------------- |
+| NVIDIA GPU (vLLM) | `modelserver/gpu/vllm/` | Default configuration (`base`, `coreweave`, and `gke` providers) |
 
 > [!NOTE]
 > Encoder-cache transfer between instances (the P2P NIXL mode of `--ec-transfer-config`,
@@ -249,9 +249,12 @@ architectures tie.
 > pays off:
 >
 > * Step 1: drop `encode` from the rollout screener's `revisionGating.requiredRoles`
->   (`[prefill, decode]`) in
->   [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml), or in
->   the prefill and decode files for the 3-EPP topology (the encode release is not needed).
+>   (`[prefill, decode]`). For the single-EPP topology, add
+>   `-f ${REPO_ROOT}/guides/${GUIDE_NAME}/router/${GUIDE_NAME}-pd-only.values.yaml` after
+>   the guide's values file in the `helm install`:
+>   [`router/coord-disaggregation-pd-only.values.yaml`](router/coord-disaggregation-pd-only.values.yaml)
+>   repeats the plugin config with only that list changed. For the 3-EPP topology, edit it
+>   in the prefill and decode files (the encode release is not needed).
 >   The screener only offers a revision that has a Ready pod of every required role, so
 >   with `encode` listed and no encode pods it drops every endpoint and the EPP answers
 >   `503` on each request. The `encode` scheduling profile itself needs no change: with no
@@ -266,17 +269,18 @@ architectures tie.
 >       -p '[{"op":"replace","path":"/spec/roles/0/spec/replicas","value":0}]' # roles/0 is encode
 >   ```
 >
-> * Step 3: after deploying the Coordinator (either overlay — this patch is
->   provider-independent), apply
->   [`coordinator/base/patch-pd-only.yaml`](coordinator/base/patch-pd-only.yaml) to drop
->   the `replace-media-urls`, `render`, and `encode` steps from `pipeline.steps` (keeping
->   only `conditional-decode`, `prefill`, and `decode`), then restart the coordinator
->   Deployment:
+> * Step 3: after the provider `case`, before building the overlay, switch to its PD-only
+>   variant: `pd-only` instead of `base`, `pd-only-gke` instead of `gke`. Each adds
+>   [`coordinator/components/pd-only`](coordinator/components/pd-only/kustomization.yaml),
+>   which drops the `replace-media-urls`, `render`, and `encode` steps from
+>   `pipeline.steps` (keeping only `conditional-decode`, `prefill`, and `decode`). Cleanup
+>   rebuilds the same overlay, so it needs no change:
 >
 >   ```bash
->   kubectl patch configmap llm-d-coordinator-config -n ${NAMESPACE} --type=strategic \
->       --patch="$(envsubst < ${REPO_ROOT}/guides/${GUIDE_NAME}/coordinator/base/patch-pd-only.yaml)"
->   kubectl rollout restart deployment/llm-d-coordinator -n ${NAMESPACE}
+>   case "${COORDINATOR_OVERLAY}" in
+>     gke) export COORDINATOR_OVERLAY=pd-only-gke ;;
+>     *)   export COORDINATOR_OVERLAY=pd-only ;;
+>   esac
 >   ```
 >
 > * Step 4: skip entirely — the multimedia downloader is only used by the `replace-media-urls` pipeline step.
@@ -378,7 +382,7 @@ kustomize build ${REPO_ROOT}/guides/${GUIDE_NAME}/${ROUTER_HTTPROUTE_OVERLAY}/ |
 >   InferencePool carrying the same 300s timeout, which is where GKE takes it from.
 
 <details>
-<summary><h4>3 separate EPPs (one per role)</h4></summary>
+<summary><b>3 separate EPPs (one per role)</b></summary>
 
 Three independent llm-d Router releases — one per role — each with its own EPP and
 InferencePool scoped to that role's pods. No profile-selection plugin needed: each
@@ -706,9 +710,18 @@ What to expect, measured on the `coreweave` overlay (1 slice, encode 2 / prefill
 * **The render Service keeps serving**: it selects prefill pods by label, so it tracks whichever revision is Ready and never empties while at least one prefill pod is up.
 
 > [!NOTE]
-> Across a rollout, pairing an `encode` or `prefill` pod of one revision with a `decode` pod of another risks a failed encoder-cache or KV transfer between mismatched engine versions. The single-EPP topology pins every phase of a request to one revision: the Coordinator tags each phase call with `x-llm-d-disagg-revision` and gives an image's parallel encode subrequests a shared `x-llm-d-revision-decision-id`, and the `disaggregatedset-rollout-screener` in [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml) acts on them (scoped to the shared `llm-d.ai/guide` label, so it sees all three roles; `disableCoordination` left unset so the encode fan-out resolves to one revision).
+> Across a rollout, pairing an `encode` or `prefill` pod of one revision with a `decode` pod of another risks a failed encoder-cache or KV transfer between mismatched engine versions.
+> The single-EPP topology pins every phase of a request to one revision: the Coordinator tags each phase call with `x-llm-d-disagg-revision` and gives an image's parallel encode subrequests a shared `x-llm-d-revision-decision-id`, and the `disaggregatedset-rollout-screener` in [`router/coord-disaggregation.values.yaml`](router/coord-disaggregation.values.yaml) acts on them (scoped to the shared `llm-d.ai/guide` label, so it sees all three roles;
+> `disableCoordination` left unset so the encode fan-out resolves to one revision).
 >
-> The 3-EPP topology carries the screener in all three per-role values files. The screener does not read the InferencePool: it watches Pods through the manager cache and keeps the ones matching its own `scope.labelSelector`, so a role-scoped EPP still sees every role of the set, and its local coordination covers the encode fan-out. One case differs from the single EPP: a request that cascades after a `412` from the conditional-decode probe carries no `x-llm-d-disagg-revision` (the EPP stamps it only once an upstream endpoint responds). The single EPP reuses the revision it stored under the Coordinator's per-request `x-llm-d-revision-decision-id`; three EPP processes do not share that memory. So all three screeners key the revision choice on the same `x-session-id` header, which resolves one session to one revision on every EPP while they see the same eligible revisions and shares (each EPP derives the shares from its own Pod events, so two can briefly disagree during a rollout step; [llm-d-router#3931](https://github.com/llm-d/llm-d-router/issues/3931) carries the probe's revision across the 412 instead). A request without the header draws at random on encode or prefill. Later phases follow the stamped revision either way. See [Safe Rollouts with DisaggregatedSet](../../docs/operations/disaggregation/safe-rollouts.md#step-1-keep-pd-pairs-inside-one-revision).
+> The 3-EPP topology carries the screener in all three per-role values files.
+> The screener does not read the InferencePool: it watches Pods through the manager cache and keeps the ones matching its own `scope.labelSelector`, so a role-scoped EPP still sees every role of the set, and its local coordination covers the encode fan-out.
+> One case differs from the single EPP: a request that cascades after a `412` from the conditional-decode probe carries no `x-llm-d-disagg-revision` (the EPP stamps it only once an upstream endpoint responds).
+> The single EPP reuses the revision it stored under the Coordinator's per-request `x-llm-d-revision-decision-id`; three EPP processes do not share that memory.
+> So all three screeners key the revision choice on the same `x-session-id` header, which resolves one session to one revision on every EPP while they see the same eligible revisions and shares (each EPP derives the shares from its own Pod events, so two can briefly disagree during a rollout step; [llm-d-router#3931](https://github.com/llm-d/llm-d-router/issues/3931) carries the probe's revision across the 412 instead).
+> A request without the header draws at random on encode or prefill.
+> Later phases follow the stamped revision either way.
+> See [Safe Rollouts with DisaggregatedSet](../../docs/operations/disaggregation/safe-rollouts.md#step-1-keep-pd-pairs-inside-one-revision).
 
 ## Benchmark
 
@@ -760,8 +773,8 @@ GPUs total, identical on both architectures.
   identical nodes on both architectures to isolate architecture from node variance):
 
   <p float="left">
-    <img src="benchmark-results/inconcurrent_var_prompt_always_disaggr_pinned/ttft_distribution.png" width="45%" />
-    <img src="benchmark-results/inconcurrent_var_prompt_always_disaggr_pinned/request_latency_distribution.png" width="45%" />
+    <img alt="ttft distribution" src="benchmark-results/inconcurrent_var_prompt_always_disaggr_pinned/ttft_distribution.png" width="45%" />
+    <img alt="request latency distribution" src="benchmark-results/inconcurrent_var_prompt_always_disaggr_pinned/request_latency_distribution.png" width="45%" />
   </p>
 
   Median TTFT is 1.8-4.8% higher with the Coordinator across all four prompt lengths
@@ -775,8 +788,8 @@ GPUs total, identical on both architectures.
   (100, 500, 1,000, 2,500 output tokens; fixed 250-token input; same node-pinning):
 
   <p float="left">
-    <img src="benchmark-results/inconcurrent_var_output_always_disaggr_pinned/ttft_distribution.png" width="45%" />
-    <img src="benchmark-results/inconcurrent_var_output_always_disaggr_pinned/request_latency_distribution.png" width="45%" />
+    <img alt="ttft distribution" src="benchmark-results/inconcurrent_var_output_always_disaggr_pinned/ttft_distribution.png" width="45%" />
+    <img alt="request latency distribution" src="benchmark-results/inconcurrent_var_output_always_disaggr_pinned/request_latency_distribution.png" width="45%" />
   </p>
 
   Median TTFT is 1.6-4.9% higher with the Coordinator; median request latency is
@@ -794,8 +807,8 @@ GPUs total, identical on both architectures.
   stages from 50 to 500; every stage hit 100% success on both sides.
 
   <p float="left">
-    <img src="benchmark-results/6Dx4GPU_4Px8GPU_DeepSeek-V2_concurrent/ttft_distribution.png" width="45%" />
-    <img src="benchmark-results/6Dx4GPU_4Px8GPU_DeepSeek-V2_concurrent/request_latency_distribution.png" width="45%" />
+    <img alt="ttft distribution" src="benchmark-results/6Dx4GPU_4Px8GPU_DeepSeek-V2_concurrent/ttft_distribution.png" width="45%" />
+    <img alt="request latency distribution" src="benchmark-results/6Dx4GPU_4Px8GPU_DeepSeek-V2_concurrent/request_latency_distribution.png" width="45%" />
   </p>
 
   At the two lowest concurrency stages the Coordinator is ahead on both metrics that
@@ -857,18 +870,18 @@ and release the requests in bursts of 300 / 360 / 420 so that the two decode pod
 at 125–145 concurrent requests and 85–100% KV. Means of two repeats per level
 (sidecar / Coordinator):
 
-| Burst size | Throughput (req/s) | Mean E2E (s) | Mean TTFT (s) | P99 TTFT (s) | Mean TPOT (ms) |
-|---|---|---|---|---|---|
-| 300 | 0.93 / **1.03** | 137 / **124** | 45.9 / **41.8** | 92 / **90** | 44.0 / 44.6 |
-| 360 | 1.01 / **1.06** | 150 / **143** | 55.0 / **52.6** | 115 / **106** | 46.1 / 46.6 |
-| 420 | 1.05 / **1.15** | 171 / **154** | 64.1 / **61.1** | 147 / **124** | 52.1 / **45.7** |
+| Burst size | Throughput (req/s) | Mean E2E (s)  | Mean TTFT (s)   | P99 TTFT (s)  | Mean TPOT (ms)  |
+| ---------- | ------------------ | ------------- | --------------- | ------------- | --------------- |
+| 300        | 0.93 / **1.03**    | 137 / **124** | 45.9 / **41.8** | 92 / **90**   | 44.0 / 44.6     |
+| 360        | 1.01 / **1.06**    | 150 / **143** | 55.0 / **52.6** | 115 / **106** | 46.1 / 46.6     |
+| 420        | 1.05 / **1.15**    | 171 / **154** | 64.1 / **61.1** | 147 / **124** | 52.1 / **45.7** |
 
 <p float="left">
-  <img src="benchmark-results/2Px8GPU_2Dx8GPU_Qwen3-VL-235B-A22B_burst/2p2d_throughput.png" width="45%" />
-  <img src="benchmark-results/2Px8GPU_2Dx8GPU_Qwen3-VL-235B-A22B_burst/2p2d_latency.png" width="45%" />
+  <img alt="2p2d throughput" src="benchmark-results/2Px8GPU_2Dx8GPU_Qwen3-VL-235B-A22B_burst/2p2d_throughput.png" width="45%" />
+  <img alt="2p2d latency" src="benchmark-results/2Px8GPU_2Dx8GPU_Qwen3-VL-235B-A22B_burst/2p2d_latency.png" width="45%" />
 </p>
 <p float="left">
-  <img src="benchmark-results/2Px8GPU_2Dx8GPU_Qwen3-VL-235B-A22B_burst/2p2d_decode_imbalance.png" width="60%" />
+  <img alt="2p2d decode imbalance" src="benchmark-results/2Px8GPU_2Dx8GPU_Qwen3-VL-235B-A22B_burst/2p2d_decode_imbalance.png" width="60%" />
 </p>
 
 Throughput is 4–10% higher and E2E latency 5–10% lower at every burst size, and at 420

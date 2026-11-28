@@ -2,16 +2,16 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-- configmap.yaml
-- deployment.yaml
-- httproute.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - httproute.yaml
 
 # release (llm-d-router v1.0.0): configmap.yaml uses this release's key names
 # (server.secure_serving, renamed in llm-d-router#2908). The nightly component
 # tracks main and uses the same name, so either works.
 components:
-- ../../../recipes/modelserver/components/images/coordinator/release
+  - ../../../recipes/modelserver/components/images/coordinator/release
 
-# patch-pd-only.yaml is deliberately not listed here: it's applied with
-# `kubectl patch` after the deploy, not built into either overlay. See the PD-only
-# note in ../../README.md's Installation Instructions.
+# The PD-only pipeline is the ../pd-only and ../pd-only-gke overlays, which add
+# ../components/pd-only to this base and to ../gke. See the PD-only note in
+# ../../README.md's Installation Instructions.
