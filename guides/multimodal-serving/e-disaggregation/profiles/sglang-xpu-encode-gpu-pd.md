@@ -278,5 +278,5 @@ Performance gains are model- and workload-dependent. Compare this deployment wit
 ## References
 
 * [llm-d Router architecture](https://github.com/llm-d/llm-d-router/blob/main/docs/architecture.md)
-* [SGLang EPD disaggregation](https://github.com/sgl-project/sglang/blob/main/docs/advanced_features/epd_disaggregation.md)
+* [SGLang EPD disaggregation](https://github.com/sgl-project/sglang/blob/main/docs/docs/advanced_features/epd_disaggregation.mdx)
 * [Intel Resource Drivers for Kubernetes](https://github.com/intel/intel-resource-drivers-for-kubernetes)
