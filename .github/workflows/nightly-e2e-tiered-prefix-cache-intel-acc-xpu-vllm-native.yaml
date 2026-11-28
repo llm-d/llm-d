@@ -93,6 +93,8 @@ jobs:
       infra_provider: ${{ inputs.infra_provider || 'base' }}
       offloading_target: ${{ inputs.offloading_target || 'cpu' }}
       connector: ${{ inputs.connector || 'native' }}
+      # Opt in to the guide's shared validator for this nightly.
+      e2e_validate_args: '--extra-validate tiered-prefix-cache'
       cluster_namespace: ${{ inputs.cluster_namespace || 'llm-d-nightly-tiered-prefix-cache-intel-xpu' }}
       helm_release: ${{ inputs.helm_release || 'llmdbenchcicdr-xpu' }}
       workspace_dir: ${{ inputs.workspace_dir || '/tmp/llmdbenchcicdk-xpu' }}
