@@ -1,0 +1,58 @@
+# amd/GLM-5.3-Quark-MXFP4-AttnFP8 colocated on one MI355X node: two tensor-parallel replicas
+# (2 pods x TP4, one endpoint each), 2,048-token prefill chunks, MTP-3.
+# Pair with router/glm-5-3-colocated-tp.values.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base-colocated
+components:
+  - ../../components/fabric
+
+patches:
+  - target:
+      group: apps
+      kind: StatefulSet
+      name: glm-5-3
+    patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: glm-5-3
+      spec:
+        template:
+          spec:
+            containers:
+              - name: vllm
+                env:
+                  - name: PARALLELISM
+                    value: tp
+                  # 149e9 bytes per GPU; the MLA latent is replicated across the TP ranks, about
+                  # 1.59M tokens per replica.
+                  - name: KV_CACHE_MEMORY_BYTES
+                    value: "149000000000"
+                resources:
+                  limits:
+                    cpu: "80"
+                  requests:
+                    cpu: "80"
+  # One API server on 8000, which also serves /health.
+  - target:
+      group: apps
+      kind: StatefulSet
+      name: glm-5-3
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/ports
+        value:
+          - containerPort: 8000
+            name: modelserver
+            protocol: TCP
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/httpGet/port
+        value: modelserver
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe/httpGet/port
+        value: modelserver
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe/httpGet/port
+        value: modelserver

@@ -1,0 +1,84 @@
+# MoRI settings for AMD Pensando AINIC rails: one rail per GPU, rail-isolated RoCEv2, netdev MTU
+# 9000 (RDMA path MTU 4096). MoRI requires identical settings on every engine pod, so each patch
+# covers every engine container.
+#
+# MORI_RDMA_SL and MORI_RDMA_TC are the RoCE QoS of the fabric the reference results were
+# measured on (802.1p priority 3, DSCP 26, ECN capable: TC = 26 << 2 | 2 = 106). Set them to your
+# fabric's values, in both patches. guides/wide-ep/modelserver/amd/vllm/base documents each knob.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+patches:
+  - target:
+      group: apps
+      kind: StatefulSet
+    patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: any
+      spec:
+        template:
+          spec:
+            containers:
+              - name: vllm
+                env:
+                  # MORI_RDMA_DEVICES and MORI_IB_GID_INDEX are unset: the pod sees only its own
+                  # rails, ibverbs lists them in rail order, and MoRI picks the RoCEv2 GID per rail.
+                  - name: MORI_RDMA_SL
+                    value: "3"
+                  - name: MORI_RDMA_TC
+                    value: "106"
+                  - name: MORI_IB_PATH_MTU
+                    value: "4096"
+                  # Literal "1", not "true": MoRI's JIT gates -DMORI_PROXY_ENABLED on a string compare.
+                  - name: MORI_ENABLE_HOST_PROXY
+                    value: "1"
+                  # Rail-isolated fabric: queue pairs only between NICs on the same rail.
+                  - name: MORI_ENABLE_RAIL_ONLY
+                    value: "1"
+                  - name: MORI_ENABLE_DMABUF_REG
+                    value: "1"
+                  - name: MORI_IO_RAIL_AFFINITY
+                    value: "1"
+                  # Selects MoRI-EP's atomics-free inter-node kernels (ROCm/mori#736). Every layout
+                  # here keeps expert parallelism inside one node; the reference runs set it.
+                  # MORI_IB_ENABLE_RELAXED_ORDERING=1 is rejected together with it.
+                  - name: MORI_EP_DISABLE_RDMA_ATOMICS
+                    value: "1"
+  - target:
+      group: disaggregatedset.x-k8s.io
+      kind: DisaggregatedSet
+    patch: |-
+      apiVersion: disaggregatedset.x-k8s.io/v1
+      kind: DisaggregatedSet
+      metadata:
+        name: any
+      spec:
+        roles:
+          - name: prefill
+            spec: &fabric-role
+              leaderWorkerTemplate:
+                workerTemplate:
+                  spec:
+                    containers:
+                      - name: vllm
+                        env:
+                          - name: MORI_RDMA_SL
+                            value: "3"
+                          - name: MORI_RDMA_TC
+                            value: "106"
+                          - name: MORI_IB_PATH_MTU
+                            value: "4096"
+                          - name: MORI_ENABLE_HOST_PROXY
+                            value: "1"
+                          - name: MORI_ENABLE_RAIL_ONLY
+                            value: "1"
+                          - name: MORI_ENABLE_DMABUF_REG
+                            value: "1"
+                          - name: MORI_IO_RAIL_AFFINITY
+                            value: "1"
+                          - name: MORI_EP_DISABLE_RDMA_ATOMICS
+                            value: "1"
+          - name: decode
+            spec: *fabric-role

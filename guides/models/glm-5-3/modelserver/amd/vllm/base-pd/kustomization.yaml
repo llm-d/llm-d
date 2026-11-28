@@ -1,0 +1,25 @@
+# GLM-5.3 P/D with MoRI-IO READ, one DisaggregatedSet. Requires LWS v0.11.1+ with the
+# DisaggregatedSet CRD, plus model-pvc and the glm-5-3-rdma NetworkAttachmentDefinition.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - disaggregatedset.yaml
+  - serviceAccount.yaml
+
+components:
+  - ../../../../../../recipes/modelserver/components/disaggregatedset-schema
+  - ../components/image
+  - ../components/routing-sidecar
+  - ../../../../../../recipes/modelserver/components/graceful-shutdown
+
+labels:
+  - pairs:
+      llm-d.ai/model: GLM-5.3
+      llm-d.ai/guide: glm-5-3
+      llm-d.ai/accelerator-variant: gpu
+      llm-d.ai/accelerator-vendor: amd
+    fields:
+      - version: v1
+        kind: ServiceAccount
+        path: metadata/labels
+        create: true

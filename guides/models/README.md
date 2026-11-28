@@ -7,6 +7,7 @@ which are optimized for agentic workloads.
 
 * [DeepSeek-V4](./deepseek-v4/README.md) - `deepseek-ai/DeepSeek-V4-Pro` on GB200 NVL72.
 * [GLM-5.2](./glm-5-2/README.md) - `zai-org/GLM-5.2-FP8` on H200.
+* [GLM-5.3](./glm-5-3/README.md) - `amd/GLM-5.3-Quark-MXFP4-AttnFP8` on AMD MI355X.
 * [Kimi-K3.1-Pro](./kimi-k3-1/README.md) - `moonshotai/Kimi-K3.1-Pro` on NVIDIA GB300 (vLLM) and TPU 7x (SGLang).
 * [NVIDIA Nemotron 3 Ultra](./nemotron-3-ultra/README.md) - `NVIDIA-Nemotron-3-Ultra-550B` on H200.
 * [Qwen3.5-397B](./qwen3-5-397b/README.md) - `Qwen/Qwen3.5-397B-A17B-FP8` on TPU 7x (Torch TPU).
