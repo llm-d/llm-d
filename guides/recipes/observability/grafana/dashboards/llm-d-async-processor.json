@@ -263,6 +263,7 @@
         {
           "expr": "histogram_quantile(0.99, sum by (le) (rate(llm_d_async_async_inference_latency_time_millis_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
           "legendFormat": "p99",
+          "exemplar": true,
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
