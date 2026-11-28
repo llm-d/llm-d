@@ -22,6 +22,8 @@ llm-d supports two encode-disaggregated topologies:
 > [!NOTE]
 > The Encode (E) stage is only relevant for requests with multimodal content (images, video, or audio). For text-only requests, the encode stage is skipped regardless of the configured topology.
 
+<!-- Separate the adjacent admonitions for markdown renderers. -->
+
 > [!WARNING]
 > Encode disaggregation is under active development in vLLM, SGLang, and the llm-d Router.
 
@@ -160,7 +162,7 @@ helm install ${RELEASE_NAME} \
 ```
 
 <details>
-<summary><h4>Gateway Mode</h4></summary>
+<summary><b>Gateway Mode</b></summary>
 
 To employ a Kubernetes Gateway managed proxy instead of the standalone one, then instead of applying the standalone helm chart above, do the following:
 
@@ -185,8 +187,9 @@ helm install ${RELEASE_NAME} \
 Apply the Kustomize overlays for your chosen topology:
 
 Choose the overlay matching your infrastructure provider:
-- **GKE**: Deploys on GKE. The overlay does not configure RDMA yet, so KV-cache and encoder-cache transfers use TCP. For the DRA and DRANet (RoCE) setup that the P/D guide uses, see [P/D platform prerequisites](../../pd-disaggregation/README.md#prerequisites) and the [`gke-rdma` component](../../recipes/modelserver/components/gke-rdma/kustomization.yaml).
-- **CoreWeave**: Deploys on CoreWeave.
+
+* **GKE**: Deploys on GKE. The overlay does not configure RDMA yet, so KV-cache and encoder-cache transfers use TCP. For the DRA and DRANet (RoCE) setup that the P/D guide uses, see [P/D platform prerequisites](../../pd-disaggregation/README.md#prerequisites) and the [`gke-rdma` component](../../recipes/modelserver/components/gke-rdma/kustomization.yaml).
+* **CoreWeave**: Deploys on CoreWeave.
 
 ```bash
 kubectl apply -n ${NAMESPACE} -k ${MODEL_SERVER_PATH}
@@ -207,7 +210,7 @@ kubectl apply -n ${NAMESPACE} \
 
 ### 1. Get the IP of the Proxy
 
-**Standalone Mode**
+#### Standalone Mode
 
 ```bash
 export IP=$(kubectl get service ${RELEASE_NAME}-epp -n ${NAMESPACE} -o jsonpath='{.spec.clusterIP}')
@@ -284,7 +287,9 @@ curl -sS -f -X POST http://${IP}/v1/chat/completions \
 
 ### 3. Confirm the EC Transfer (vLLM profiles)
 
-A successful multimodal response does not show that the encoder output came from the Encode Worker, because a consumer that receives no encoder output encodes the media locally. The ECCPU Connector logs the transfer at `DEBUG` level only, so set the log level on the consumer (the decode pods in E/PD, the prefill pods in E/P/D):
+A successful multimodal response does not show that the encoder output came from the Encode Worker, because a consumer that receives no encoder output encodes the media locally. The ECCPU Connector logs the transfer at `DEBUG` level only, so set the log level on the consumer (the decode pods in E/PD, the prefill pods in E/P/D).
+
+Changing the role template rolls the whole set. On a GPU-saturated cluster, each rollout can take several minutes while pods drain and reload the model. If you are deploying specifically to validate the connector, set the log level in the overlay before deployment to avoid the first restart.
 
 ```bash
 export EC_CONSUMER_ROLE=decode # use "prefill" for the E/P/D profile
@@ -298,10 +303,12 @@ kubectl wait --for=condition=Available disaggregatedset/pd-disagg-${TOPOLOGY} -n
 Send the multimodal request from step 2 again, then search the consumer logs:
 
 ```bash
-kubectl logs -l llm-d.ai/role=${EC_CONSUMER_ROLE} -c modelserver -n ${NAMESPACE} --tail=-1 | grep "EC consumer: NIXL xfer complete"
+kubectl logs -l llm-d.ai/role=${EC_CONSUMER_ROLE} -c modelserver -n ${NAMESPACE} --tail=-1 --ignore-errors=true | grep "EC consumer: NIXL xfer complete"
 ```
 
-One line for each transferred multimodal item shows that the transfer works. If there is no such line, make sure that the image contains the P2P NIXL mode (see [EC Connector](#ec-connector)). Remove the variable when you are done:
+One line for each transferred multimodal item shows that the transfer works. The grep prints nothing until a multimodal request reaches the restarted pods; send the request from step 2 after the rollout completes. Reusing the same image may hit the consumer's local multimodal cache and produce no new transfer line, so use a new image when repeating the check. The `--ignore-errors` flag lets the command continue past terminated pods left by the rollout.
+
+If there is still no line, make sure that the image contains the P2P NIXL mode (see [EC Connector](#ec-connector)). Copy the matching log output before removing the variable, because the second rollout replaces the pods that hold the evidence. If you are proceeding directly to [Cleanup](#cleanup), you can skip this restart:
 
 ```bash
 ENV=$(kubectl get disaggregatedset/pd-disagg-${TOPOLOGY} -n ${NAMESPACE} -o json | jq --argjson i "${ROLE}" '.spec.roles[$i].spec.leaderWorkerTemplate.workerTemplate.spec.containers[0].env | map(.name) | index("VLLM_LOGGING_LEVEL")')
@@ -341,7 +348,7 @@ The vLLM E/PD and E/P/D profiles use the upstream vLLM `v0.30.0` image (`docker.
 
 ### E/PD Request Flow
 
-```
+```text
 Client -> Envoy -> EPP -> Decode Worker Sidecar
                               |
                               +-> Encode Worker (multimodal content)
@@ -367,7 +374,7 @@ By sharing these cached outputs across CPU memory-mapped regions, it enables con
 
 ### E/P/D Request Flow
 
-```
+```text
 Client -> Envoy -> EPP -> Decode Worker Sidecar
                               |
                               +-> Encode Worker (multimodal content)
