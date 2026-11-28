@@ -256,6 +256,65 @@ These steps run nightly on GKE with one model server replica:
 deploys this guide from its `guide.yaml` with
 [`scripts/nightly-deploy-gke.sh`](scripts/nightly-deploy-gke.sh) and then runs this section.
 
+## Observability & Troubleshooting
+
+This path adds conversation storage and tool-output continuation in front of the router and model servers. Use the failing stage of [`verify.py`](verify.py) to narrow the investigation: a successful inference request alone does not verify conversation persistence or the tool loop.
+
+### Signals to check
+
+| Signal | What it helps diagnose | Where to look |
+| --- | --- | --- |
+| Agentic API readiness and logs | Startup failures, request errors, and failures involving the configured inference backend or database | The `agentic-api` Deployment and its container logs |
+| PostgreSQL readiness, storage and logs | Database startup or connectivity problems, and storage that has not been provisioned | The `agentic-api-postgres` Deployment, PVC and container logs |
+| Model-server load (`vllm:num_requests_waiting`, `vllm:num_requests_running`) and latency (`vllm:time_to_first_token_seconds`, `vllm:inter_token_latency_seconds`) | Whether inference demand or generation time contributes to slow responses | [Model-server metrics](../../docs/operations/observability/model-server-metrics.md#vllm) and [Basic Model Serving queries](../../docs/operations/observability/promql.md#basic-model-serving) and [Tier 1 latency queries](../../docs/operations/observability/promql.md#tier-1-immediate-failure--saturation-indicators) |
+| EPP requests and errors (`llm_d_epp_request_total`, `llm_d_epp_request_error_total`) and scheduling latency (`llm_d_epp_plugin_duration_seconds`) | Routing activity, upstream errors, and scheduling time | [Router metrics](../../docs/operations/observability/router-metrics.md) and [Routing & Load Balancing queries](../../docs/operations/observability/promql.md#routing--load-balancing) |
+
+In this deployment, Agentic API and PostgreSQL export no metrics. Agentic API v0.9.0 has no `/metrics` route: it exports OpenTelemetry traces and metrics over OTLP when `OTEL_TRACES_EXPORTER` / `OTEL_METRICS_EXPORTER` and an OTLP endpoint are configured; both exporters default to `none`. See [Tracing](../../docs/operations/observability/tracing.md) for the shared collector setup. The guide does not deploy a PostgreSQL exporter. Use their readiness and logs instead. Router and model-server queries also require monitoring to be configured; follow [Collect Metrics](../../docs/operations/observability/metrics.md) for those components. Missing time series alone do not establish that a component is idle or healthy.
+
+A complete agentic interaction can include multiple inference rounds, tool execution and conversation storage. Model-server latency measures only part of that interaction.
+
+### Inspect the deployed components
+
+Use the namespace selected in the setup steps. These commands apply to an already deployed guide:
+
+```bash
+kubectl get pods,svc,pvc -n "${NAMESPACE}"
+kubectl describe deployment agentic-api -n "${NAMESPACE}"
+kubectl describe deployment agentic-api-postgres -n "${NAMESPACE}"
+kubectl describe pvc agentic-api-postgres -n "${NAMESPACE}"
+kubectl logs deployment/agentic-api -c agentic-api -n "${NAMESPACE}" --tail=100
+kubectl logs deployment/agentic-api-postgres -c postgres -n "${NAMESPACE}" --tail=100
+kubectl get pods -n "${NAMESPACE}" -l llm-d.ai/guide=optimized-baseline
+kubectl logs "deployment/${GUIDE_NAME}-epp" -c epp -n "${NAMESPACE}" --tail=100
+```
+
+The model-server selector and router release above match this guide's standalone deployment. When layering Agentic API onto another guide, use that guide's model-server selector and router release instead, for example `deployment/pd-disaggregation-epp`.
+
+At the manifest's default `info` log level, failed readiness checks may report only `gateway dependencies not ready`. To expose backend rejection, connectivity or timeout details, temporarily enable debug logging:
+
+```bash
+kubectl set env deployment/agentic-api -n "${NAMESPACE}" \
+  RUST_LOG=agentic_server=debug,agentic_core=debug
+```
+
+This changes the Deployment and starts a rollout. Inspect logs from the new pod; it may remain unready until the dependency problem is fixed. After collecting the diagnostic output, re-apply the manifest using [installation step 4](#4-deploy-agentic-api) to restore the default log level. Restoring it also starts a rollout.
+
+If the PostgreSQL PVC is `Pending`, inspect its events and the cluster's StorageClass before investigating conversation retrieval. The guide requires a default StorageClass for this claim.
+
+The Agentic API receives its database connection through the `agentic-api-postgres` Secret's `database-url` key and its inference backend through `--llm-api-base`. Check these configuration references when logs report connection failures; avoid copying database credentials into issue reports.
+
+If the Secret is recreated while the PostgreSQL PVC survives, the new password can differ from the password in the initialized database: `POSTGRES_PASSWORD` is applied only when initializing an empty data directory. For `password authentication failed for user "postgres"`, restore the original credentials. Reinitializing with a fresh PVC is an alternative only when discarding the stored conversations is acceptable.
+
+### Common failure modes
+
+- **`[1/4]` cannot reach the endpoint or discover a model:** check whether the port-forward is still running. `/health` confirms the process is up; `/ready` returns 503 unless both the storage backend and the inference backend behind `--llm-api-base` are ready. The Deployment also uses `/ready` as its readiness probe. If it fails, inspect PostgreSQL and the router/model-server pods, then use Agentic API debug logs to distinguish dependency failures.
+- **`[2/4]` fails before completing the first turn:** inspect the reported HTTP error or model output first. The test checks that the first answer contains its ticket reference; a model that does not follow that instruction has not demonstrated a database failure.
+- **`[2/4]` fails on the follow-up:** distinguish an HTTP error from a successful response containing the wrong answer. Inspect Agentic API and PostgreSQL logs around the request. An incorrect answer alone does not prove that PostgreSQL lost the conversation. Retrieve the Turn 1 response ID printed by `verify.py` using `GET /v1/responses/{response_id}` against the same Agentic API endpoint. A returned stored turn confirms that record persisted, so investigate model behavior and conversation reconstruction; it does not prove the follow-up used that record correctly. A 404 means the record is unavailable at that endpoint: check the ID and database configuration before concluding it was never stored.
+- **`[3/4]` returns no `function_call`:** check the model server's tool-calling flags and model-specific parser against [Add agentic-api to Another Guide](#add-agentic-api-to-another-guide). The test itself delivers the webhook to a local listener; the cluster does not need an inbound connection to the test machine.
+- **`[4/4]` fails while HTTP checks pass:** inspect the WebSocket upgrade error and whether the access path supports WebSockets. `--skip-websocket` explicitly omits this test; it does not establish that WebSocket mode works.
+
+For shared inference alerts, see [Configure Alerts](../../docs/operations/observability/alerting.md).
+
 ## Add agentic-api to Another Guide
 
 `agentic-api` needs only a router Service to send inference to, so it also layers onto a guide you already run, such as [P/D Disaggregation](../pd-disaggregation/README.md) or [Wide Expert Parallelism](../wide-ep/README.md), provided its model server is vLLM. The other guide stays as its own README leaves it.
