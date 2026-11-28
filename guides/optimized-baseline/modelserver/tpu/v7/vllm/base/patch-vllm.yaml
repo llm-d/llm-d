@@ -41,9 +41,6 @@ spec:
             # Drain in-flight requests on SIGTERM. Sized with the grace period in
             # recipes/modelserver/components/graceful-shutdown; raise both together.
             - "--shutdown-timeout=45"
-            # Uncomment for distributed tracing
-            # - "--otlp-traces-endpoint=http://otel-collector:4317"
-            # - "--collect-detailed-traces=all"
           env:
             - name: VLLM_ENGINE_READY_TIMEOUT_S
               value: "3600"

@@ -26,9 +26,6 @@ spec:
             # Drain in-flight requests on SIGTERM. Sized with the grace period in
             # recipes/modelserver/components/graceful-shutdown; raise both together.
             - "--shutdown-timeout=45"
-            # Uncomment for distributed tracing
-            # - "--otlp-traces-endpoint=http://otel-collector:4317"
-            # - "--collect-detailed-traces=all"
           ports:
             # Exposed so each router replica can dial the per-pod ZMQ
             # socket bound by vLLM (KV_EVENTS_ENDPOINT=tcp://*:5556).
