@@ -210,7 +210,7 @@ EOF
 * **Components** are the primary unit of code organization (repo scope or directory/package/module within a repo)
 * **Maintainers** own components and approve changes
 * **Contributors** can become maintainers through sufficient evidence of contribution
-* Code ownership is reflected in [OWNERS files](https://go.k8s.io/owners) consistent with Kubernetes project conventions
+* Code ownership is reflected per repository, in a GitHub [CODEOWNERS file](https://docs.github.com/articles/about-code-owners) or in [OWNERS files](https://go.k8s.io/owners) consistent with Kubernetes project conventions; this repository uses [CODEOWNERS](CODEOWNERS)
 
 ### Core vs Incubating Components
 

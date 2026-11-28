@@ -14,7 +14,7 @@ The purpose of this policy is to ensure a smooth on-boarding and off-boarding pr
 
 ### 2.1. Access Request
 
-- New members shall submit an access request, via a blank GitHub issue from the llm-d repository, mentioning all members of the [OWNERS](https://github.com/llm-d/llm-d/blob/main/OWNERS) file.
+- New members shall submit an access request, via a blank GitHub issue from the llm-d repository, mentioning the [repository approvers](MAINTAINERS.md#repository-approvers).
 - The access request should include the member's GitHub username and a brief description of their role and contributions to the llm-d project.
 
 ### 2.2. Review and Approval

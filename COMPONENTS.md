@@ -42,7 +42,7 @@ the decision.
 
 Any component the project takes on, core or ecosystem, needs:
 
-- an owning team named in `OWNERS` that commits to maintaining it,
+- an owning team named in `CODEOWNERS` or `OWNERS` that commits to maintaining it,
 - documentation for users, and a guide or well-lit path where it makes sense,
 - working CI, tests, and the standard project linting and sign-off,
 - a real use case or a clear gap it fills, and
@@ -80,7 +80,7 @@ path. The roster below is the source of truth and changes by pull request.
 ### Core
 
 | Component | Purpose |
-|-----------|---------|
+| --------- | ------- |
 | `llm-d-router` | Request routing and endpoint picking (EPP / gateway) |
 | `llm-d-kv-cache` | Distributed KV cache scheduling and offloading |
 | `llm-d-routing-sidecar` | Prefill/decode routing sidecar |
@@ -92,7 +92,7 @@ path. The roster below is the source of truth and changes by pull request.
 ### Ecosystem
 
 | Component | Purpose |
-|-----------|---------|
+| --------- | ------- |
 | `llm-d-planner` | Capacity planning and configuration at design and deploy time |
 | `llm-d-benchmark` | Benchmarking framework and tooling |
 | `llm-d-inference-sim` | GPU-free vLLM simulator |

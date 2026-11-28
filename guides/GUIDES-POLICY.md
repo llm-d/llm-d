@@ -47,8 +47,8 @@ A directory under `guides/` is a guide if and only if all of the following hold:
 3. **It is opinionated.** A guide states *the* recommended configuration for its
    pattern and explains the reasoning. It is not a catalogue of every possible
    option. Alternatives belong in a tuning section, not in the main flow.
-4. **It has a named owner.** An `OWNERS` file identifies who is accountable for
-   keeping it correct.
+4. **It has a named owner.** Its entry in [`CODEOWNERS`](../CODEOWNERS) identifies
+   who is accountable for keeping it correct.
 5. **It is reproducible by a stranger.** No undocumented cluster assumptions, no
    internal-only images, no steps that exist only in someone's shell history.
 
@@ -98,7 +98,8 @@ When it is unclear, ask in order:
 These apply to **every** guide at Tier 1 and above, independently of tier. Tier
 requirements in [§5](#5-production-readiness-tiers) are *additional*.
 
-1. **`OWNERS`** file, with at least two owners.
+1. **`CODEOWNERS`** entry for the guide directory, naming at least two owners
+   alongside the approvers team.
 2. **`README.md`** with, at minimum, these sections in this order:
    - Overview — what problem this solves and when to choose it
    - What you get — the topology, ideally with a diagram
@@ -293,7 +294,7 @@ Each arrow is a promotion and follows [§6.2](#62-who-approves-a-promotion).
 
 1. Baseline requirements of [§4](#4-baseline-requirements-for-every-guide) are met.
 2. The claimed tier is stated, with its gaps to the next tier.
-3. `OWNERS` is added or updated.
+3. The guide's `CODEOWNERS` entry is added or updated.
 4. `guides/README.md` is updated with the index entry.
 5. All CI checks pass, including the kustomize dry-run job for Tier 2+ and
    `scripts/guide.py` validation for Tier 3+.

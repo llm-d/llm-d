@@ -37,6 +37,7 @@ MAPPING_PATH = REPO_ROOT / ".github" / "slack-channels.yaml"
 
 API_ROOT = "https://api.github.com"
 OWNER_IDS_PATH = REPO_ROOT / ".github" / "slack-owner-ids.yaml"
+CODEOWNERS_PATH = REPO_ROOT / "CODEOWNERS"
 
 # Jobs that publish the gh-pages badge rather than exercise the guide. They run
 # with `if: always()`, so they are present even when the test failed.
@@ -210,6 +211,33 @@ def emit_warning(message: str, *, json_output: bool = False) -> None:
     print(message, file=sys.stderr if json_output else sys.stdout)
 
 
+def codeowners_pattern(pattern: str) -> re.Pattern:
+    """Compile a CODEOWNERS pattern into a regex over a repo-relative file path.
+
+    Covers the syntax GitHub honors: `*`, `**`, `?`, a leading or inner `/`
+    anchoring the pattern to the repo root, and a trailing `/` naming a
+    directory. Same matcher as .github/workflows/slash-test-nightly.yaml.
+    """
+    anchored = "/" in pattern[:-1]
+    body = pattern.removeprefix("/").removesuffix("/")
+    tokens = {"**/": "(?:.*/)?", "**": ".*", "*": "[^/]*", "?": "[^/]"}
+    regex = "".join(
+        tokens.get(part) or re.escape(part) for part in re.split(r"(\*\*/|\*\*|\*|\?)", body)
+    )
+    tail = "/.*" if pattern.endswith("/") else "" if body.endswith("/*") else "(?:/.*)?"
+    return re.compile(f"{'^' if anchored else '^(?:.*/)?'}{regex}{tail}$")
+
+
+def code_owners_of(text: str, file: str) -> list[str]:
+    """Return the lowercased owners on the last CODEOWNERS line matching file."""
+    owners: list[str] = []
+    for line in text.splitlines():
+        pattern, *rest = line.split("#", 1)[0].split() or [""]
+        if pattern and codeowners_pattern(pattern).match(file):
+            owners = rest
+    return [owner.lower() for owner in owners]
+
+
 def resolve_owner_mentions(workflow_file: str, *, json_output: bool = False) -> list[str]:
     """Return Slack mentions for the guide owners of a nightly workflow."""
     workflow_path = REPO_ROOT / ".github" / "workflows" / workflow_file
@@ -245,19 +273,16 @@ def resolve_owner_mentions(workflow_file: str, *, json_output: bool = False) -> 
     if not guide_dir.is_relative_to(guides_root):
         return []
 
-    # Nested guides may share an OWNERS file with their parent directory, so use
-    # the nearest one at or above the guide, stopping at guides/ itself.
-    owners_path = None
-    for directory in (guide_dir, *guide_dir.parents):
-        if directory == guides_root:
-            break
-        if (directory / "OWNERS").is_file():
-            owners_path = directory / "OWNERS"
-            break
-    if not owners_path:
+    # The owners of a guide are the code owners of its README.md. Team and
+    # email entries have no login to map to a Slack ID and are skipped.
+    if not CODEOWNERS_PATH.is_file():
         return []
-    with owners_path.open(encoding="utf-8") as fh:
-        owners = yaml.safe_load(fh) or {}
+    readme = (guide_dir / "README.md").relative_to(REPO_ROOT).as_posix()
+    logins = {
+        owner[1:]
+        for owner in code_owners_of(CODEOWNERS_PATH.read_text(encoding="utf-8"), readme)
+        if owner.startswith("@") and "/" not in owner
+    }
 
     try:
         with OWNER_IDS_PATH.open(encoding="utf-8") as fh:
@@ -266,11 +291,6 @@ def resolve_owner_mentions(workflow_file: str, *, json_output: bool = False) -> 
         slack_ids = {}
 
     slack_ids = {str(login).lower(): user_id for login, user_id in slack_ids.items()}
-    logins = {
-        str(login).lower()
-        for role in ("approvers", "reviewers")
-        for login in (owners.get(role) or [])
-    }
     mentions = {
         f"<@{slack_ids[login]}>"
         for login in logins

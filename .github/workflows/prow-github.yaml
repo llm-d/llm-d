@@ -10,3 +10,23 @@ permissions:
 jobs:
   prow:
     uses: llm-d/llm-d-infra/.github/workflows/reusable-prow-commands.yaml@main
+    with:
+      # `/approve` is not enabled: approval is a GitHub review from a code owner
+      # (CODEOWNERS). In a repository without OWNERS files the command makes the
+      # github-actions bot submit an approving review for any org member.
+      prow-commands: |
+        /assign
+        /unassign
+        /retitle
+        /area
+        /kind
+        /priority
+        /remove
+        /lgtm
+        /close
+        /reopen
+        /lock
+        /milestone
+        /hold
+        /cc
+        /uncc

@@ -1,6 +1,6 @@
 # Nightly Benchmark Regression tests
 
-Each one of the [guides](../../guides) in `llm-d` (also known as "well-lit paths", undergoes a nightly test cycle. This test aims to check not only the basic functionality of a given guide, but in addition to it, track performance regressions by running a "representative" (as defined by the "guide owners", e.g., [optimized-baseline](../../guides/optimized-baseline/OWNERS)) workload against it.
+Each one of the [guides](../../guides) in `llm-d` (also known as "well-lit paths", undergoes a nightly test cycle. This test aims to check not only the basic functionality of a given guide, but in addition to it, track performance regressions by running a "representative" (as defined by the "guide owners" listed in [CODEOWNERS](../../CODEOWNERS)) workload against it.
 
 ## Components
 
@@ -59,7 +59,7 @@ workflow files:
 
 ## Slack notifications
 
-[`notify-slack-nightly.yaml`](notify-slack-nightly.yaml) posts failed, unstable, and timed-out **scheduled** nightly results to `#llm-d-ci-alerts`. Successful runs are not posted. For these runs, the notifier mentions the owners in that guide's `OWNERS` file (the nearest one at or above the workflow's `guide_path`, or `guides/<guide>/` when it has none) when their Slack IDs are listed in [`.github/slack-owner-ids.yaml`](../slack-owner-ids.yaml).
+[`notify-slack-nightly.yaml`](notify-slack-nightly.yaml) posts failed, unstable, and timed-out **scheduled** nightly results to `#llm-d-ci-alerts`. Successful runs are not posted. For these runs, the notifier mentions the code owners of that guide's `README.md` in [`CODEOWNERS`](../../CODEOWNERS) (the guide is the workflow's `guide_path`, or `guides/<guide>/` when it has none) when their Slack IDs are listed in [`.github/slack-owner-ids.yaml`](../slack-owner-ids.yaml).
 
 This replaces the old `/github subscribe` integration, which also fired on manual `workflow_dispatch` runs.
 
@@ -132,7 +132,7 @@ One-time, needs Slack workspace admin plus repo admin:
 4. **Invite the bot to `#llm-d-ci-alerts`**: `/invite @llm-d-ci` (let Slack's autocomplete resolve the handle). For a private channel, a member has to do this from inside it. Forgetting this makes the posting step fail with `not_in_channel`.
 5. Add the token as the `SLACK_BOT_TOKEN` repository secret (*Settings → Secrets and variables → Actions*).
 
-The [`.github/slack-owner-ids.yaml`](../slack-owner-ids.yaml) file lists every login in `guides/**/OWNERS`. Fill in each Slack member ID, and comment out owners without a Slack account; add new guide owners there as they are added. Only listed owners with a blank ID produce a warning. Slack member IDs look like `U012ABCDEF`; GitHub logins alone do not create Slack mentions.
+The [`.github/slack-owner-ids.yaml`](../slack-owner-ids.yaml) file lists every login on the guide entries in [`CODEOWNERS`](../../CODEOWNERS). Fill in each Slack member ID, and comment out owners without a Slack account; add new guide owners there as they are added. Only listed owners with a blank ID produce a warning. Slack member IDs look like `U012ABCDEF`; GitHub logins alone do not create Slack mentions.
 
 ## Adding a new guide
 

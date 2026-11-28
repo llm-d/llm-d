@@ -26,7 +26,7 @@ For detailed information about contributing to llm-d, including the contribution
 
 Code is owned by the project, and all code must have at least one (preferably two or more) humans responsible for its care. The primary unit of code organization is a **component** at a repo scope or within a repo (a directory / package / module / image / subsystem).
 
-Code ownership is reflected as [OWNERS files](https://go.k8s.io/owners) in repositories and directories consistent with the Kubernetes project (maintainers are approvers, maintainers and frequent contributors are named as reviewers).
+Code ownership is reflected per repository, either as a GitHub [CODEOWNERS file](https://docs.github.com/articles/about-code-owners) or as [OWNERS files](https://go.k8s.io/owners) in repositories and directories consistent with the Kubernetes project (maintainers are approvers, maintainers and frequent contributors are named as reviewers).
 
 ### Project Ownership
 

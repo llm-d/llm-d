@@ -1,5 +1,5 @@
 ---
-# Map lowercase GitHub logins from guides/**/OWNERS to Slack member IDs.
+# Map lowercase GitHub logins from the guide entries in CODEOWNERS to Slack member IDs.
 # Add new guide owners here; blank values need their Slack member IDs.
 # Comment out owners without a Slack account.
 aavarghese: U08TVV0D26L
