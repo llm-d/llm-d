@@ -13,7 +13,7 @@ The approximate implementation is designed to be lightweight and requires no ext
 
 ### Components
 
-- [**`approx-prefix-cache-producer`**](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/approximateprefix) (DataProducer plugin)
+- [**`approx-prefix-cache-producer`**](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requesthandling/dataproducer/approximateprefix) (DataProducer plugin)
 - [**`prefix-cache-scorer`**](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/prefix) (Scorer plugin)
 
 ### How it Works
@@ -37,8 +37,8 @@ The precise implementation provides 100% accuracy by leveraging actual token dat
 
 ### Components
 
-- [**`token-producer`**](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/tokenizer) (DataProducer plugin)
-- [**`precise-prefix-cache-producer`**](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/preciseprefixcache) (DataProducer plugin) — owns the KV-block index
+- [**`token-producer`**](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requesthandling/dataproducer/tokenizer) (DataProducer plugin)
+- [**`precise-prefix-cache-producer`**](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requesthandling/dataproducer/preciseprefixcache) (DataProducer plugin) — owns the KV-block index
 - [**`prefix-cache-scorer`**](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/prefix) (Scorer plugin) — scores using the producer's match info via `prefixMatchInfoProducerName: precise-prefix-cache-producer`
 - **KV-Cache Indexer** (EPP Data Layer component)
 

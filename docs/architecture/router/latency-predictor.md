@@ -142,7 +142,7 @@ Three plugins handle scoring and final selection.
   - **`least`** (default). Bin-pack: prefer the endpoint closest to the SLO boundary — smallest positive headroom if any pod meets the SLO, smallest negative deficit otherwise. Maximizes utilization and keeps less-loaded pods free for bursty arrivals.
   - **`most`**. Spread: prefer the endpoint with the most positive headroom. More conservative, leaves slack for unexpected spikes. For negative headroom, `least` is always used regardless of this setting.
 
-- **[`latency-slo-admitter`](https://github.com/llm-d/llm-d-router/blob/main/pkg/epp/framework/plugins/requestcontrol/admitter/latencyslo/README.md)** rejects *sheddable* requests (priority < 0) when no endpoint can meet the SLO, rather than wasting capacity on a guaranteed miss. No-op when SLO headers are absent.
+- **[`latency-slo-admitter`](https://github.com/llm-d/llm-d-router/blob/main/pkg/epp/framework/plugins/requesthandling/admitter/latencyslo/README.md)** rejects *sheddable* requests (priority < 0) when no endpoint can meet the SLO, rather than wasting capacity on a guaranteed miss. No-op when SLO headers are absent.
 
 - **[`weighted-random-picker`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/picker/weightedrandom/README.md)** selects an endpoint via weighted random selection over the scores. This spreads load while still favoring better-scoring endpoints, and avoids the "everyone piles onto the current best pod" failure mode of pure arg-max selection.
 

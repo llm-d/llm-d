@@ -76,13 +76,13 @@ Parser plugins understand the payloads of requests and responses. This is key fo
 
 #### Admitter Plugins
 
-* **[`latency-slo-admitter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/admitter/latencyslo/README.md)**: Rejects sheddable requests (priority < 0) when no endpoint can meet latency SLO constraints.
+* **[`latency-slo-admitter`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requesthandling/admitter/latencyslo/README.md)**: Rejects sheddable requests (priority < 0) when no endpoint can meet latency SLO constraints.
 
 #### Data Producers
 
-* **[`predicted-latency-producer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/predictedlatency/README.md)**: Trains XGBoost models via a sidecar and generates per-endpoint TTFT/TPOT predictions. It calculates SLO headroom, collects training data, and tracks per-endpoint running request queues.
-* **[`inflight-load-producer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/inflightload)**: Tracks the number of in-flight requests and estimated tokens for each endpoint. It increments counts in `PreRequest` and decrements them in `ResponseBodyProcessor` on end-of-stream.
-* **[`approx-prefix-cache-producer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/approximateprefix)**: Prepares data for approximate prefix cache aware scheduling by hashing prompts in blocks and matching them against an indexer of cached prefixes on servers.
+* **[`predicted-latency-producer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requesthandling/dataproducer/predictedlatency/README.md)**: Trains XGBoost models via a sidecar and generates per-endpoint TTFT/TPOT predictions. It calculates SLO headroom, collects training data, and tracks per-endpoint running request queues.
+* **[`inflight-load-producer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requesthandling/dataproducer/inflightload)**: Tracks the number of in-flight requests and estimated tokens for each endpoint. It increments counts in `PreRequest` and decrements them in `ResponseBodyProcessor` on end-of-stream.
+* **[`approx-prefix-cache-producer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requesthandling/dataproducer/approximateprefix)**: Prepares data for approximate prefix cache aware scheduling by hashing prompts in blocks and matching them against an indexer of cached prefixes on servers.
 
 ---
 

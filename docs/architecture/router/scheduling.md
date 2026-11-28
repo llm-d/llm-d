@@ -94,7 +94,7 @@ When a profile runs, it first filters the candidate endpoints. If any remain, it
 * **[`queue-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/queuedepth)**: Prefers endpoints with shorter request queues.
 * **[`running-requests-size-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/runningrequests)**: Scores based on the number of currently active requests.
 * **[`token-load-scorer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/scheduling/scorer/tokenload)**: Scores based on the total token load (input + output) handled by the endpoint.
-* **[`precise-prefix-cache-producer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requestcontrol/dataproducer/preciseprefixcache)** (DataProducer, paired with `prefix-cache-scorer`): Publishes `PrefixCacheMatchInfo` from its event-driven KV-cache index. Set `prefixMatchInfoProducerName: precise-prefix-cache-producer` on the scorer to use this precise cache state.
+* **[`precise-prefix-cache-producer`](https://github.com/llm-d/llm-d-router/tree/main/pkg/epp/framework/plugins/requesthandling/dataproducer/preciseprefixcache)** (DataProducer, paired with `prefix-cache-scorer`): Publishes `PrefixCacheMatchInfo` from its event-driven KV-cache index. Set `prefixMatchInfoProducerName: precise-prefix-cache-producer` on the scorer to use this precise cache state.
 
   > [!NOTE]
   > Without an explicit `prefixMatchInfoProducerName`, `prefix-cache-scorer` falls back to the auto-instantiated `approx-prefix-cache-producer`.

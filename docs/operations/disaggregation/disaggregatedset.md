@@ -56,7 +56,7 @@ plugins:
     hostname: disaggregatedset.x-k8s.io/slice # "same host" now means "same slice"
 ```
 
-Add `topology-affinity-scorer` (prefer) or `topology-affinity-filter` (require) to the prefill scheduling profile; see the [sample P/D topology EPP config](https://github.com/llm-d/llm-d-router/blob/main/deploy/config/pd-topology-epp-config.yaml). Same slice implies physical proximity only when placement policy is enabled.
+Add `topology-affinity-scorer` (prefer) or `topology-affinity-filter` (require) to the prefill scheduling profile; see the [sample P/D topology EPP config](https://github.com/llm-d/llm-d-router/blob/main/test/e2e/artifacts/config/pd-topology-epp-config.yaml). Same slice implies physical proximity only when placement policy is enabled.
 
 ## Autoscaling Roles
 
