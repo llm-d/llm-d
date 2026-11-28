@@ -86,6 +86,7 @@ Configures request handling behavior.
 | --- | --- |
 | `parsers` | [][ParserConfig](#parserconfig) <br/> List of parsing plugins used to process protocol messages. If unspecified, `openai-parser`, `anthropic-parser`, and `vllmhttp-parser` are configured by default. |
 | `propagatePriority` | `bool` <br/> Injects the resolved request priority into the outbound request body for backend-native priority scheduling. Defaults to `false`. |
+| `dataProducers` | [][DataProducerConfig](#dataproducerconfig) <br/> Data producers that run during request handling, on the located endpoints before screeners, so screeners can consume their data. A producer not listed also runs there when a screener or a listed producer consumes its data. Every other producer runs after screeners. See [Data Producer Phases](../architecture/router/configuration.md#data-producer-phases). |
 
 ## DataLayerConfig
 
@@ -147,3 +148,9 @@ Configures request handling behavior.
 | Field | Description |
 | --- | --- |
 | `pluginRef` | `string` <br/> **Required** <br/> Reference to a parser plugin instance. |
+
+## DataProducerConfig
+
+| Field | Description |
+| --- | --- |
+| `pluginRef` | `string` <br/> **Required** <br/> Reference to a plugin instance that implements `DataProducer`. Each producer may be listed once. |
